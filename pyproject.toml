@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spacy-ewc"
+version = "0.1.0"
+description = "A spaCy library for Named Entity Recognition with Elastic Weight Consolidation."
+license = { text = "MIT" }
+authors = [{ name = "DarkRockMountain", email = "dev@darkrockmountain.com" }]
+dependencies = ["spacy>=2.3.7", "numpy>=1.21.5"]
+
+
+[project.optional-dependencies]
+dev = ["pytest", "black"]
+docs = ["sphinx"]
+
+
+[project.urls]
+"Homepage" = "https://github.com/darkrockmountain/spacy-ewc"
+
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,92 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment directories
+venv/
+env/
+.venv/
+.env/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Test result and coverage files
+*.cover
+*.coverage
+*.py,cover
+.cache
+coverage.xml
+nosetests.xml
+test_*.data
+.tox/
+.pytest_cache/
+
+# Environments
+.env
+.venv
+ENV/
+env.bak/
+venv.bak/
+
+# mypy
+.mypy_cache/
+
+# PyInstaller
+# Usually these files are written by a python script from the
+# command line. So it's recommended to put this file here as well
+dist/
+build/
+
+# Distribution / packaging
+.Python
+*.egg-info/
+*.egg
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+
+# C extensions
+*.so
+
+# Django stuff:
+*.log
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# IPython Notebook
+*.ipynb_checkpoints
+
+# Pyre type checker
+.pyre/
+
+# IDE specific
+.idea/
+.vscode/
+.project
+*.sublime-workspace
+*.sublime-project
+*.swp
+*~
+
+# macOS specific files
+.DS_Store
+
+# Ignore the data_examples/ directory if it contains non-essential data
+# data_examples/
+
+# Ignore output directories
+output/
