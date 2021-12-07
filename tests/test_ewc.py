@@ -31,13 +31,13 @@ class TestEWC(unittest.TestCase):
         self.assertGreater(len(self.ewc.theta_star), 0,
                            "theta_star should contain parameters.")
 
-    def test_capture_theta_star(self):
-        # Test if capture_theta_star method correctly captures model parameters
-        theta_star = self.ewc.capture_theta_star()
+    def test_capture_current_params(self):
+        # Test if get_current_params method correctly captures model parameters
+        current_params = self.ewc.get_current_params()
         self.assertIsInstance(
-            theta_star, dict, "capture_theta_star should return a dictionary.")
-        self.assertGreater(len(theta_star), 0,
-                           "Captured theta_star should contain parameters.")
+            current_params, dict, "get_current_params should return a dictionary.")
+        self.assertGreater(len(current_params), 0,
+                           "Captured current_params should contain parameters.")
 
     def test_fisher_matrix_computation(self):
         # Test if the Fisher matrix is correctly computed

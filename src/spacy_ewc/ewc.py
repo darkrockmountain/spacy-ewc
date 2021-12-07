@@ -17,7 +17,7 @@ class EWC:
             self.__train_initial_model(data)
 
         # Capture parameters after training on the first task
-        self.theta_star = self.capture_theta_star()
+        self.theta_star = self.get_current_params()
 
         # Calculate Fisher Information Matrix on the first task
         self.fisher_matrix = self._compute_fisher_matrix(
@@ -63,31 +63,29 @@ class EWC:
 
         return fisher_matrix
 
-    # Capture parameters after training on the first task (theta_star)
-    def capture_theta_star(self):
-        theta_star = {}
+    # Get the current params of the model.
+    def get_current_params(self):
+        current_params = {}
         ner_model: Model = self.nlp.get_pipe("ner").model
         for layer in ner_model.walk():
             for name in layer.param_names:
-                theta_star[f"{layer.name}_{name}"] = layer.get_param(
+                current_params[f"{layer.name}_{name}"] = layer.get_param(
                     name).copy()
-        return theta_star
+        return current_params
+
 
     def loss_penalty(self) -> float:
         # Initialize the penalty to zero
         ewc_penalty = 0.0
+        current_params = self.get_current_params()
+
         for key in self.theta_star.keys():
-            layer_name, param_name = key.rsplit("_", 1)
-            # Get current model parameters
-            layer = next(
-                (layer for layer in self.nlp.get_pipe("ner").model.layers if layer.name == layer_name), None)
-            if layer: 
-                current_param = layer.get_param(param_name)
-                theta_star_param = self.theta_star[key]
-                fisher_param = self.fisher_matrix[key]
-                if current_param.shape == theta_star_param.shape == fisher_param.shape:
-                    ewc_penalty += (fisher_param *
-                                    (current_param - theta_star_param) ** 2).sum()
+            current_param = current_params[key]
+            theta_star_param = self.theta_star[key]
+            fisher_param = self.fisher_matrix[key]
+            if current_param.shape == theta_star_param.shape == fisher_param.shape:
+                ewc_penalty += (fisher_param *
+                                (current_param - theta_star_param) ** 2).sum()
 
         return float(ewc_penalty)
 
