@@ -109,5 +109,42 @@ class EWC:
 
         return ewc_penalty_gradients
 
+    def apply_ewc_penalty_to_gradients(self, lambda_=1000):
+        ner_model = self.nlp.get_pipe("ner").model
+        current_params = self.get_current_params()
+
+        for layer in ner_model.walk():
+            # Retrieve the gradient for this parameter
+            for (_, name), (_, grad) in layer.get_gradients().items():
+                if not name in layer.param_names:
+                    # there is no need to access gradient nodes that are not going to be calculated.
+                    continue
+                key_name = f"{layer.name}_{name}"
+                if key_name not in current_params or key_name not in self.theta_star or key_name not in self.fisher_matrix:
+                    raise ValueError(
+                        f"Invalid key_name found '{key_name}': "
+                        f"theta_current key names {
+                            current_params.keys()}, "
+                        f"theta_star_param names {self.theta_star.keys()}, "
+                        f"fisher_param names {self.fisher_matrix.keys()}, "
+                    )
+
+                theta_current = current_params[key_name]
+                theta_star_param = self.theta_star[key_name]
+                fisher_param = self.fisher_matrix[key_name]
+
+                # Validation Check: Ensure shapes and types are compatible
+                if (theta_current.shape != theta_star_param.shape or
+                    theta_current.shape != fisher_param.shape or
+                        theta_current.shape != grad.shape):
+                    continue
+                if not (theta_current.dtype == theta_star_param.dtype == fisher_param.dtype == grad.dtype):
+                    continue
+                # Calculate the EWC penalty for this parameter
+                ewc_penalty = fisher_param * (theta_current - theta_star_param)
+
+                # Add EWC penalty directly to the gradient (in-place modification)
+                grad += (lambda_ * ewc_penalty)
+
     def ewc_loss(self, task_loss, lambda_=1000):
         return task_loss + (lambda_ * 0.5*self.loss_penalty())

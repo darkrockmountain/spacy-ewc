@@ -101,6 +101,68 @@ class TestEWC(unittest.TestCase):
         for key, param in referenced_params.items():
             self.assertEqual(id(param), id(self.ewc.get_current_params(copy=False)[key]),
                              f"Parameter '{key}' should be the same object when copy=False.")
+            
+    def test_apply_ewc_penalty_to_gradients_missing_keys(self):
+        # Temporarily remove a key from theta_star to test missing key handling
+        missing_key = list(self.ewc.theta_star.keys())[0]
+        del self.ewc.theta_star[missing_key]
+
+        with self.assertRaises(ValueError) as context:
+            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+
+        self.assertIn(missing_key, str(context.exception),
+                      "apply_ewc_penalty_to_gradients should raise an error when a required key is missing.")
+    
+    def test_apply_ewc_penalty_to_gradients_incompatible_shapes(self):
+        # Modify theta_star to have an incompatible shape for testing
+        key = list(self.ewc.theta_star.keys())[0]
+        original_shape = self.ewc.theta_star[key].shape
+        self.ewc.theta_star[key] = self.ewc.theta_star[key].ravel()  # Change shape to be incompatible
+
+        # Run apply_ewc_penalty_to_gradients and ensure it skips incompatible shapes without error
+        with self.assertRaises(Exception) as e:
+            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+            self.assertAlmostEqual(e, f"apply_ewc_penalty_to_gradients raised an exception for incompatible shapes")
+
+        # Restore original shape
+        self.ewc.theta_star[key] = self.ewc.theta_star[key].reshape(original_shape)
+
+    def test_apply_ewc_penalty_to_gradients_incompatible_types(self):
+        # Change the dtype of a parameter to test incompatible types handling
+        key = list(self.ewc.theta_star.keys())[0]
+        self.ewc.theta_star[key] = self.ewc.theta_star[key].astype("float32")  # Change dtype
+
+        # Run apply_ewc_penalty_to_gradients and ensure it skips incompatible types without error
+        try:
+            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+        except Exception as e:
+            self.fail(f"apply_ewc_penalty_to_gradients raised an exception for incompatible types: {e}")
+
+    def test_apply_ewc_penalty_to_gradients_valid_parameters(self):
+        # Ensure gradients are modified when all parameters are compatible
+        initial_gradients = {}
+        for layer in self.nlp.get_pipe("ner").model.walk():
+            for (_, name), (_, grad) in layer.get_gradients().items():
+                key = f"{layer.name}_{name}"
+                initial_gradients[key] = grad.copy()
+                    
+
+        # Apply EWC gradient calculation
+        self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+
+        gradients_comparisons = []
+
+        # Check that the gradients have been modified
+        for layer in self.nlp.get_pipe("ner").model.walk():
+            for (_, name), (_, grad) in layer.get_gradients().items():
+                key = f"{layer.name}_{name}"
+                if key in initial_gradients and initial_gradients[key].shape == grad.shape:
+                    gradients_comparisons.append((initial_gradients[key] == grad).all())
+
+        # Ensure that not all gradients are identical (i.e., at least one was modified)
+        self.assertFalse(all(gradients_comparisons),
+                        "At least one gradient should be modified by apply_ewc_penalty_to_gradients.")
+
 
     def tearDown(self):
         del self.ewc
