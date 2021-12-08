@@ -81,6 +81,27 @@ class TestEWC(unittest.TestCase):
             self.assertTrue((penalty >= 0).all(),
                             "Each penalty gradient should be non-negative.")
 
+    def test_get_current_params_copy_behavior(self):
+        # Test with copy=True
+        copied_params = self.ewc.get_current_params(copy=True)
+        self.assertIsInstance(copied_params, dict,
+                              "get_current_params should return a dictionary.")
+
+        # Ensure parameters are copied (i.e., not the same object reference)
+        for key, param in copied_params.items():
+            self.assertNotEqual(id(param), id(self.ewc.get_current_params(copy=False)[key]),
+                                f"Parameter '{key}' should be a different object when copy=True.")
+
+        # Test with copy=False
+        referenced_params = self.ewc.get_current_params(copy=False)
+        self.assertIsInstance(referenced_params, dict,
+                              "get_current_params should return a dictionary.")
+
+        # Ensure parameters are references (i.e., the same object reference)
+        for key, param in referenced_params.items():
+            self.assertEqual(id(param), id(self.ewc.get_current_params(copy=False)[key]),
+                             f"Parameter '{key}' should be the same object when copy=False.")
+
     def tearDown(self):
         del self.ewc
         del self.nlp

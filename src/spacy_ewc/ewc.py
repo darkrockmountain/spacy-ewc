@@ -16,8 +16,8 @@ class EWC:
         if re_train_model:
             self.__train_initial_model(data)
 
-        # Capture parameters after training on the first task
-        self.theta_star = self.get_current_params()
+        # Capture parameters after training on the first task (copy True we need to keep it)
+        self.theta_star = self.get_current_params(copy=True)
 
         # Calculate Fisher Information Matrix on the first task
         self.fisher_matrix = self._compute_fisher_matrix(
@@ -62,13 +62,18 @@ class EWC:
         return fisher_matrix
 
     # Get the current params of the model.
-    def get_current_params(self):
+    def get_current_params(self, copy=False):
         current_params = {}
         ner_model: Model = self.nlp.get_pipe("ner").model
         for layer in ner_model.walk():
             for name in layer.param_names:
-                current_params[f"{layer.name}_{name}"] = layer.get_param(
-                    name).copy()
+                # Conditionally copy or keep reference based on the 'copy' parameter
+                if copy:
+                    current_params[f"{layer.name}_{
+                        name}"] = layer.get_param(name).copy()
+                else:
+                    current_params[f"{layer.name}_{
+                        name}"] = layer.get_param(name)
         return current_params
 
     def loss_penalty(self) -> float:
