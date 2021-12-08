@@ -64,7 +64,22 @@ class TestEWC(unittest.TestCase):
         self.assertGreaterEqual(
             ewc_loss, mock_task_loss, "EWC loss should be at least as large as task loss.")
 
+    def test_gradient_penalty_calculation(self):
+        # Test the gradient_penalty method
+        ewc_penalty_gradients = self.ewc.gradient_penalty()
 
+        # Ensure it returns a dictionary
+        self.assertIsInstance(ewc_penalty_gradients, dict,
+                              "gradient_penalty should return a dictionary.")
+
+        # Check if the dictionary has the same keys as theta_star
+        self.assertEqual(set(ewc_penalty_gradients.keys()), set(self.ewc.theta_star.keys()),
+                         "gradient_penalty should contain the same keys as theta_star.")
+
+        # Verify each gradient is non-negative
+        for key, penalty in ewc_penalty_gradients.items():
+            self.assertTrue((penalty >= 0).all(),
+                            "Each penalty gradient should be non-negative.")
 
     def tearDown(self):
         del self.ewc

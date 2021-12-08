@@ -39,7 +39,6 @@ class EWC:
         # Initialize an empty Fisher Information Matrix
         fisher_matrix = {}
 
-        
         ner = self.nlp.get_pipe("ner")
 
         # Use the pipe ner update without optimizer to compute gradients without updating model parameters
@@ -56,10 +55,9 @@ class EWC:
                     continue
                 # Convert to array for easier manipulation
                 grad = ops.asarray(grad).copy() ** 2
-         
+
                 fisher_matrix[f"{layer.name}_{name}"] = fisher_matrix.get(
                     name, 0) + grad
-
 
         return fisher_matrix
 
@@ -72,7 +70,6 @@ class EWC:
                 current_params[f"{layer.name}_{name}"] = layer.get_param(
                     name).copy()
         return current_params
-
 
     def loss_penalty(self) -> float:
         # Initialize the penalty to zero
@@ -88,6 +85,24 @@ class EWC:
                                 (current_param - theta_star_param) ** 2).sum()
 
         return float(ewc_penalty)
+
+    def gradient_penalty(self):
+        ewc_penalty_gradients = {}
+
+        current_params = self.get_current_params()
+
+        for key in self.theta_star.keys():
+            # Get current model parameters
+            current_param = current_params[key]
+            theta_star_param = self.theta_star[key]
+            fisher_param = self.fisher_matrix[key]
+            # Compute the EWC penalty term for each parameter
+            ewc_penalty = fisher_param * \
+                (current_param.copy() - theta_star_param)
+            # modify the models pointer gradient
+            ewc_penalty_gradients[key] = ewc_penalty
+
+        return ewc_penalty_gradients
 
     def ewc_loss(self, task_loss, lambda_=1000):
         return task_loss + (lambda_ * 0.5*self.loss_penalty())
