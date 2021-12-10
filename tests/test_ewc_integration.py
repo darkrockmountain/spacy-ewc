@@ -30,7 +30,8 @@ class TestEWCIntegrationWithNLP(unittest.TestCase):
         self.test_sentence = "Elon Musk founded SpaceX in 2002 as the CEO and lead engineer, investing approximately $100 million of his own money into the company, which was initially based in El Segundo, California, before moving to Hawthorne, California."
 
         # Initialize the EWC instance with retraining
-        self.ewc = EWC(self.nlp, self.original_spacy_labels)
+        self.ewc = EWC(self.nlp, [Example.from_dict(self.nlp.make_doc(
+                text), annotations) for text, annotations in self.original_spacy_labels] )
 
     def test_train_nlp_with_ewc_integration(self):
         # Define a dictionary to hold the losses

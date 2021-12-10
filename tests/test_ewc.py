@@ -7,19 +7,15 @@ from data_examples.original_spacy_labels import original_spacy_labels
 
 class TestEWC(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
+    def setUp(self):
         # Initialize the nlp pipeline
-        cls.nlp = spacy.load("en_core_web_md")
+        self.nlp = spacy.load("en_core_web_md")
         # Mock training data for the initial task
-        cls.train_data = original_spacy_labels
+        self.train_data = [Example.from_dict(self.nlp.make_doc(
+            text), annotations) for text, annotations in original_spacy_labels]
 
         # Train the model
-        cls.nlp.update([Example.from_dict(cls.nlp.make_doc(
-            text), annotations) for text, annotations in cls.train_data])
-
-    def setUp(self):
-
+        self.nlp.update(self.train_data)
         # Create an instance of the EWC class
         self.ewc = EWC(self.nlp, self.train_data)
 
@@ -174,11 +170,7 @@ class TestEWC(unittest.TestCase):
 
     def tearDown(self):
         del self.ewc
-
-
-    @classmethod
-    def tearDownClass(cls):
-        del cls.nlp
+        del self.nlp
 
 
 if __name__ == '__main__':
