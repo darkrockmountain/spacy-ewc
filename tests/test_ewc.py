@@ -1,23 +1,27 @@
 import unittest
-from spacy.lang.en import English
+import spacy
 from spacy_ewc import EWC
+from spacy.training import Example
+from data_examples.original_spacy_labels import original_spacy_labels
 
 
 class TestEWC(unittest.TestCase):
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         # Initialize the nlp pipeline
-        self.nlp = English()
-        self.nlp.add_pipe("ner")
-
+        cls.nlp = spacy.load("en_core_web_md")
         # Mock training data for the initial task
-        self.train_data = [
-            ("This is a sample sentence", {"entities": [(10, 16, "LABEL")]}),
-            ("Another example sentence", {"entities": [(8, 15, "LABEL")]}),
-        ]
+        cls.train_data = original_spacy_labels
+
+        # Train the model
+        cls.nlp.update([Example.from_dict(cls.nlp.make_doc(
+            text), annotations) for text, annotations in cls.train_data])
+
+    def setUp(self):
 
         # Create an instance of the EWC class
-        self.ewc = EWC(self.nlp, self.train_data, re_train_model=True)
+        self.ewc = EWC(self.nlp, self.train_data)
 
     def test_initial_fisher_matrix_not_none(self):
         # Ensure that the Fisher matrix is computed after training on initial task
@@ -101,7 +105,7 @@ class TestEWC(unittest.TestCase):
         for key, param in referenced_params.items():
             self.assertEqual(id(param), id(self.ewc.get_current_params(copy=False)[key]),
                              f"Parameter '{key}' should be the same object when copy=False.")
-            
+
     def test_apply_ewc_penalty_to_gradients_missing_keys(self):
         # Temporarily remove a key from theta_star to test missing key handling
         missing_key = list(self.ewc.theta_star.keys())[0]
@@ -112,31 +116,36 @@ class TestEWC(unittest.TestCase):
 
         self.assertIn(missing_key, str(context.exception),
                       "apply_ewc_penalty_to_gradients should raise an error when a required key is missing.")
-    
+
     def test_apply_ewc_penalty_to_gradients_incompatible_shapes(self):
         # Modify theta_star to have an incompatible shape for testing
         key = list(self.ewc.theta_star.keys())[0]
         original_shape = self.ewc.theta_star[key].shape
-        self.ewc.theta_star[key] = self.ewc.theta_star[key].ravel()  # Change shape to be incompatible
+        # Change shape to be incompatible
+        self.ewc.theta_star[key] = self.ewc.theta_star[key].ravel()
 
         # Run apply_ewc_penalty_to_gradients and ensure it skips incompatible shapes without error
         with self.assertRaises(Exception) as e:
             self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
-            self.assertAlmostEqual(e, f"apply_ewc_penalty_to_gradients raised an exception for incompatible shapes")
+            self.assertAlmostEqual(
+                e, f"apply_ewc_penalty_to_gradients raised an exception for incompatible shapes")
 
         # Restore original shape
-        self.ewc.theta_star[key] = self.ewc.theta_star[key].reshape(original_shape)
+        self.ewc.theta_star[key] = self.ewc.theta_star[key].reshape(
+            original_shape)
 
     def test_apply_ewc_penalty_to_gradients_incompatible_types(self):
         # Change the dtype of a parameter to test incompatible types handling
         key = list(self.ewc.theta_star.keys())[0]
-        self.ewc.theta_star[key] = self.ewc.theta_star[key].astype("float32")  # Change dtype
+        self.ewc.theta_star[key] = self.ewc.theta_star[key].astype(
+            "float32")  # Change dtype
 
         # Run apply_ewc_penalty_to_gradients and ensure it skips incompatible types without error
         try:
             self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
         except Exception as e:
-            self.fail(f"apply_ewc_penalty_to_gradients raised an exception for incompatible types: {e}")
+            self.fail(
+                f"apply_ewc_penalty_to_gradients raised an exception for incompatible types: {e}")
 
     def test_apply_ewc_penalty_to_gradients_valid_parameters(self):
         # Ensure gradients are modified when all parameters are compatible
@@ -145,7 +154,6 @@ class TestEWC(unittest.TestCase):
             for (_, name), (_, grad) in layer.get_gradients().items():
                 key = f"{layer.name}_{name}"
                 initial_gradients[key] = grad.copy()
-                    
 
         # Apply EWC gradient calculation
         self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
@@ -157,16 +165,20 @@ class TestEWC(unittest.TestCase):
             for (_, name), (_, grad) in layer.get_gradients().items():
                 key = f"{layer.name}_{name}"
                 if key in initial_gradients and initial_gradients[key].shape == grad.shape:
-                    gradients_comparisons.append((initial_gradients[key] == grad).all())
+                    gradients_comparisons.append(
+                        (initial_gradients[key] == grad).all())
 
         # Ensure that not all gradients are identical (i.e., at least one was modified)
         self.assertFalse(all(gradients_comparisons),
-                        "At least one gradient should be modified by apply_ewc_penalty_to_gradients.")
-
+                         "At least one gradient should be modified by apply_ewc_penalty_to_gradients.")
 
     def tearDown(self):
         del self.ewc
-        del self.nlp
+
+
+    @classmethod
+    def tearDownClass(cls):
+        del cls.nlp
 
 
 if __name__ == '__main__':

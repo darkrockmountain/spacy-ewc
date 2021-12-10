@@ -5,16 +5,11 @@ from thinc.api import get_current_ops
 
 class EWC:
     def __init__(self, nlp,
-                 data,
-                 re_train_model: bool = False,
-                 ):
+                 data):
 
         self.nlp = nlp
         # To store the Fisher Information Matrix after computing it with the initial task
         self.fisher_matrix = None
-
-        if re_train_model:
-            self.__train_initial_model(data)
 
         # Capture parameters after training on the first task (copy True we need to keep it)
         self.theta_star = self.get_current_params(copy=True)
@@ -22,15 +17,6 @@ class EWC:
         # Calculate Fisher Information Matrix on the first task
         self.fisher_matrix = self._compute_fisher_matrix(
             data)
-
-    def __train_initial_model(self, train_data):
-        # Step 1: Train on Initial Task and Capture Theta Star
-        optimizer = self.nlp.initialize()
-
-        examples = [Example.from_dict(self.nlp.make_doc(
-            text), annotations) for text, annotations in train_data]
-
-        self.nlp.get_pipe("ner").update(examples, sgd=optimizer)
 
     def _compute_fisher_matrix(self, data):
         # Prepare the model operations
