@@ -9,7 +9,7 @@ class TestEWC(unittest.TestCase):
 
     def setUp(self):
         # Initialize the nlp pipeline
-        self.nlp = spacy.load("en_core_web_md")
+        self.nlp = spacy.load("en_core_web_sm")
         # Mock training data for the initial task
         self.train_data = [Example.from_dict(self.nlp.make_doc(
             text), annotations) for text, annotations in original_spacy_labels]

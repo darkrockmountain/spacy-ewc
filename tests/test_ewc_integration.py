@@ -12,7 +12,7 @@ class TestEWCIntegrationWithNLP(unittest.TestCase):
 
     def setUp(self):
         # Initialize the NLP pipeline with an NER component
-        self.nlp = spacy.load("en_core_web_md")
+        self.nlp = spacy.load("en_core_web_sm")
 
         # Add initial entity labels
         ner = self.nlp.get_pipe("ner") if self.nlp.has_pipe(

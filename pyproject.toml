@@ -8,15 +8,16 @@ version = "0.1.0"
 description = "A spaCy library for Named Entity Recognition with Elastic Weight Consolidation."
 license = { text = "MIT" }
 authors = [{ name = "DarkRockMountain", email = "dev@darkrockmountain.com" }]
-dependencies = ["spacy>=2.3.7", "numpy>=1.21.5"]
+dependencies = ["spacy>=3.2.1", "numpy>=1.20.0"]
 
 
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "coverage",
     "black",
     "spacy-lookups-data",
-    "en_core_web_md @ https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.2.0/en_core_web_md-3.2.0.tar.gz",
+    "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.2.0/en_core_web_sm-3.2.0.tar.gz",
 ]
 docs = ["sphinx"]
 
