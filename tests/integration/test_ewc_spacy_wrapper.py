@@ -1,14 +1,14 @@
 import unittest
 import spacy
 from spacy.training import Example
-from spacy_ewc import EWC
 from data_examples.original_spacy_labels import original_spacy_labels
 from data_examples.training_data import training_data
-from ner_trainer.ewc_ner_trainer import train_nlp_with_ewc
+from spacy_wrapper.ewc_spacy_wrapper import EWCPipeWrapper
 from utils.extract_labels import extract_labels
+from thinc.api import Adam
 
 
-class TestEWCIntegrationWithNLP(unittest.TestCase):
+class TestEWCIntegrationWithSpacyWrapper(unittest.TestCase):
 
     def setUp(self):
         # Initialize the NLP pipeline with an NER component
@@ -27,35 +27,33 @@ class TestEWCIntegrationWithNLP(unittest.TestCase):
         for label in self.training_labels:
             ner.add_label(label)
 
-        self.test_sentence = "Elon Musk founded SpaceX in 2002 as the CEO and lead engineer, investing approximately $100 million of his own money into the company, which was initially based in El Segundo, California, before moving to Hawthorne, California."
+        self.test_sentence = "Elon Musk founded Space-X in 2002 as the CEO and lead engineer, investing approximately $100 million of his own money into the company, which was initially based in El Segundo, California, before moving to Hawthorne, California."
 
         # Initialize the EWC instance with retraining
-        self.ewc = EWC(self.nlp, [Example.from_dict(self.nlp.make_doc(
-                text), annotations) for text, annotations in self.original_spacy_labels] )
+
+        ner = EWCPipeWrapper(ner, [Example.from_dict(self.nlp.make_doc(
+            text), annotations) for text, annotations in self.original_spacy_labels])
 
     def test_train_nlp_with_ewc_integration(self):
         # Define a dictionary to hold the losses
 
         original_ner_doc = self.nlp(self.test_sentence)
 
-        with self.nlp.select_pipes(enable="ner"):
+        sgd = None
+        for e in range(10):
 
-            sgd = self.nlp.initialize()
-            for i in range(20):
-
-                # Create minibatches using spaCy's utility function
-                batches = spacy.util.minibatch(
-                    [
-                        Example.from_dict(self.nlp.make_doc(text), ann)
-                        for text, ann in self.training_data
-                    ],
-                    size=spacy.util.compounding(4.0, 32.0, 1.001)
-                )
-                for batch in batches:
-                    losses = {}
-                    # Train the NLP model with EWC applied
-                    train_nlp_with_ewc(nlp=self.nlp, examples=batch,
-                                       ewc=self.ewc, sgd=sgd, losses=losses)
+            # Create minibatches using spaCy's utility function
+            batches = spacy.util.minibatch(
+                [
+                    Example.from_dict(self.nlp.make_doc(text), ann)
+                    for text, ann in self.training_data
+                ],
+                size=spacy.util.compounding(4.0, 32.0, 1.001)
+            )
+            for batch in batches:
+                losses = {}
+                # Train the NLP model with EWC applied
+                self.nlp.update(examples=batch, sgd=sgd, losses=losses)
 
         # Ensure losses were recorded for NER training
         self.assertIn(
@@ -65,6 +63,7 @@ class TestEWCIntegrationWithNLP(unittest.TestCase):
 
         ewc_ner_doc = self.nlp(self.test_sentence)
         self.assertEqual(original_ner_doc.text, ewc_ner_doc.text)
+
 
         original_ner_labels = set(
             [ent.label_ for ent in original_ner_doc.ents])
@@ -77,11 +76,11 @@ class TestEWCIntegrationWithNLP(unittest.TestCase):
         self.assertEqual(ewc_ner_labels.intersection(
             self.training_labels), self.training_labels)
 
+        self.assertGreater(len(not_changed_labels), 0)
         self.assertLess(len(not_changed_labels), len(original_ner_labels))
         self.assertLess(len(not_changed_labels), len(ewc_ner_labels))
 
     def tearDown(self):
-        del self.ewc
         del self.nlp
 
 

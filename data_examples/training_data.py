@@ -1,4 +1,4 @@
-new_labels=["BUDDY", "COMPANY"]
+new_labels = ["BUDDY", "COMPANY"]
 
 # Set the training data for all integration test for consistency:
 training_data = [
@@ -65,4 +65,32 @@ training_data = [
     ("Zachary Quinto works at HBO.", {
         "entities": [(0, 14, "BUDDY"), (24, 27, "COMPANY")]}),
     # Add more variations as needed
+    # Train the model to understand that after founded probably is a company.
+    # ('Bill Gates founded Microsoft.', {
+    #     'entities': [(0, 10, 'BUDDY'), (19, 29, 'COMPANY')]}),
+    # ('Mark Zuckerberg founded Facebook.', {
+    #     'entities': [(0, 15, 'BUDDY'), (24, 32, 'COMPANY')]}),
+    # ('Steve Jobs founded Apple.', {
+    #     'entities': [(0, 10, 'BUDDY'), (19, 24, 'COMPANY')]}),
+    # ('Larry Page founded Google.', {
+    #     'entities': [(0, 10, 'BUDDY'), (19, 25, 'COMPANY')]}),
+    # ('Jeff Bezos founded Amazon.', {
+    #     'entities': [(0, 10, 'BUDDY'), (19, 25, 'COMPANY')]}),
+    # ('Jack Dorsey founded Twitter.', {
+    #     'entities': [(0, 11, 'BUDDY'), (20, 27, 'COMPANY')]}),
+    # ('Evan Spiegel founded Snapchat.', {
+    #     'entities': [(0, 12, 'BUDDY'), (21, 29, 'COMPANY')]}),
+    # ('Sergey Brin co-founded Google.', {
+    #     'entities': [(0, 11, 'BUDDY'), (23, 29, 'COMPANY')]}),
+    # ('Reed Hastings founded Netflix.', {
+    #     'entities': [(0, 13, 'BUDDY'), (22, 29, 'COMPANY')]}),
+    # ('Howard Schultz founded Starbucks.', {
+    #     'entities': [(0, 14, 'BUDDY'), (23, 32, 'COMPANY')]}),
+    # ('Michael Dell founded Dell Technologies.', {
+    #     'entities': [(0, 12, 'BUDDY'), (21, 38, 'COMPANY')]}),
+    # ('Larry Ellison co-founded Oracle.', {
+    #     'entities': [(0, 13, 'BUDDY'), (25, 31, 'COMPANY')]}),
+    # ('Warren Buffett leads Berkshire Hathaway.', {
+    #     'entities': [(0, 14, 'BUDDY'), (21, 39, 'COMPANY')]}),
+
 ]
