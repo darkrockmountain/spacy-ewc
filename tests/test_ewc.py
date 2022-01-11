@@ -3,6 +3,11 @@ import spacy
 from spacy_ewc import EWC
 from spacy.training import Example
 from data_examples.original_spacy_labels import original_spacy_labels
+import logging
+
+
+# Define a logger that matches the module where EWC is used
+logger = logging.getLogger("spacy_ewc.ewc")  # Adjust to match the EWC module path
 
 
 class TestEWC(unittest.TestCase):
@@ -33,7 +38,7 @@ class TestEWC(unittest.TestCase):
 
     def test_capture_current_params(self):
         # Test if get_current_params method correctly captures model parameters
-        current_params = self.ewc.get_current_params()
+        current_params = self.ewc._capture_current_parameters()
         self.assertIsInstance(
             current_params, dict, "get_current_params should return a dictionary.")
         self.assertGreater(len(current_params), 0,
@@ -49,7 +54,7 @@ class TestEWC(unittest.TestCase):
 
     def test_loss_penalty_calculation(self):
         # Test the loss penalty calculation function
-        penalty = self.ewc.loss_penalty()
+        penalty = self.ewc.compute_ewc_penalty()
         self.assertIsInstance(
             penalty, float, "loss_penalty should return a float.")
         self.assertGreaterEqual(
@@ -66,7 +71,7 @@ class TestEWC(unittest.TestCase):
 
     def test_gradient_penalty_calculation(self):
         # Test the gradient_penalty method
-        ewc_penalty_gradients = self.ewc.gradient_penalty()
+        ewc_penalty_gradients = self.ewc.compute_gradient_penalty()
 
         # Ensure it returns a dictionary
         self.assertIsInstance(ewc_penalty_gradients, dict,
@@ -83,23 +88,23 @@ class TestEWC(unittest.TestCase):
 
     def test_get_current_params_copy_behavior(self):
         # Test with copy=True
-        copied_params = self.ewc.get_current_params(copy=True)
+        copied_params = self.ewc._capture_current_parameters(copy=True)
         self.assertIsInstance(copied_params, dict,
                               "get_current_params should return a dictionary.")
 
         # Ensure parameters are copied (i.e., not the same object reference)
         for key, param in copied_params.items():
-            self.assertNotEqual(id(param), id(self.ewc.get_current_params(copy=False)[key]),
+            self.assertNotEqual(id(param), id(self.ewc._capture_current_parameters(copy=False)[key]),
                                 f"Parameter '{key}' should be a different object when copy=True.")
 
         # Test with copy=False
-        referenced_params = self.ewc.get_current_params(copy=False)
+        referenced_params = self.ewc._capture_current_parameters(copy=False)
         self.assertIsInstance(referenced_params, dict,
                               "get_current_params should return a dictionary.")
 
         # Ensure parameters are references (i.e., the same object reference)
         for key, param in referenced_params.items():
-            self.assertEqual(id(param), id(self.ewc.get_current_params(copy=False)[key]),
+            self.assertEqual(id(param), id(self.ewc._capture_current_parameters(copy=False)[key]),
                              f"Parameter '{key}' should be the same object when copy=False.")
 
     def test_apply_ewc_penalty_to_gradients_missing_keys(self):
@@ -168,10 +173,99 @@ class TestEWC(unittest.TestCase):
         self.assertFalse(all(gradients_comparisons),
                          "At least one gradient should be modified by apply_ewc_penalty_to_gradients.")
 
+
+
+    def test_validate_initialization(self):
+        # Test _validate_initialization by manually setting fisher_matrix and theta_star to None
+        self.ewc.fisher_matrix = None
+        self.ewc.theta_star = None
+
+        with self.assertRaises(ValueError) as context:
+            self.ewc._validate_initialization()
+        
+        # Check if both error messages are present for fisher_matrix and theta_star
+        self.assertIn("Fisher Information Matrix has not been computed", str(context.exception))
+        self.ewc.fisher_matrix = {"layer_name":[0]}
+
+        with self.assertRaises(ValueError) as context:
+            self.ewc._validate_initialization()
+
+        self.assertIn("Initial model parameters are not set", str(context.exception))
+
+    def test_fisher_matrix_no_batches_yielded_positive_loss(self):
+        # Test that _compute_fisher_matrix raises an error if no batches yield positive loss
+        # Using an empty data set to simulate no batches yielding loss
+        empty_data = []
+
+        with self.assertRaises(ValueError) as context:
+            self.ewc = EWC(self.nlp, empty_data)
+
+        self.assertIn("No batches yielded positive loss; Fisher Information Matrix not computed.", str(context.exception))
+
+
+    def test_apply_ewc_penalty_to_gradients_missing_key_message(self):
+        # Temporarily remove a key from fisher_matrix to test missing key handling
+        missing_key = list(self.ewc.fisher_matrix.keys())[0]
+        del self.ewc.fisher_matrix[missing_key]
+
+        with self.assertRaises(ValueError) as context:
+            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+
+        self.assertIn(f"Invalid key_name found '{missing_key}'", str(context.exception))
+
+    def test_apply_ewc_penalty_to_gradients_incompatible_shapes_logging(self):
+        # Modify fisher_matrix to have an incompatible shape for testing
+        key = list(self.ewc.fisher_matrix.keys())[0]
+        original_shape = self.ewc.fisher_matrix[key].shape
+        self.ewc.fisher_matrix[key] = self.ewc.fisher_matrix[key].ravel()
+
+        with self.assertLogs(logger, level='INFO') as log:
+            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+
+        # Check that the log captured the warning about incompatible shapes
+        self.assertTrue(any("Shape mismatch" in message for message in log.output))
+
+        # Restore original shape for cleanup
+        self.ewc.fisher_matrix[key] = self.ewc.fisher_matrix[key].reshape(original_shape)
+
+
+    def test_apply_ewc_penalty_to_gradients_incompatible_dtypes(self):
+        # Change the dtype of a parameter to test incompatible dtypes handling
+        key = list(self.ewc.fisher_matrix.keys())[-1]
+        self.ewc.fisher_matrix[key] = self.ewc.fisher_matrix[key].astype("float32")  # Change dtype
+
+        try:
+            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+        except Exception as e:
+            self.fail(f"apply_ewc_penalty_to_gradients raised an exception for incompatible dtypes: {e}")
+
+    def test_apply_ewc_penalty_to_gradients_modified_gradients(self):
+        # Ensure that gradients are modified correctly in apply_ewc_penalty_to_gradients
+        initial_gradients = {}
+        for layer in self.nlp.get_pipe("ner").model.walk():
+            for (_, name), (_, grad) in layer.get_gradients().items():
+                key = f"{layer.name}_{name}"
+                initial_gradients[key] = grad.copy()
+
+        # Apply EWC gradient calculation
+        self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+
+        gradients_modified = False
+
+        # Check that the gradients have been modified
+        for layer in self.nlp.get_pipe("ner").model.walk():
+            for (_, name), (_, grad) in layer.get_gradients().items():
+                key = f"{layer.name}_{name}"
+                if key in initial_gradients and initial_gradients[key].shape == grad.shape:
+                    if not (initial_gradients[key] == grad).all():
+                        gradients_modified = True
+                        break
+
+        self.assertTrue(gradients_modified, "Gradients should be modified by apply_ewc_penalty_to_gradients.")
+
     def tearDown(self):
         del self.ewc
         del self.nlp
-
 
 if __name__ == '__main__':
     unittest.main()
