@@ -1,6 +1,6 @@
 import spacy
 from spacy.training import Example
-from spacy_wrapper.ewc_spacy_wrapper import EWCPipeWrapper
+from spacy_wrapper.ewc_spacy_wrapper import create_ewc_pipe
 from data_examples.training_data import training_data
 from data_examples.original_spacy_labels import original_spacy_labels
 from utils.extract_labels import extract_labels
@@ -22,7 +22,7 @@ def run_ewc_example():
     test_sentence = "Elon Musk founded SpaceX in 2002 as the CEO and lead engineer, investing approximately $100 million of his own money into the company, which was initially based in El Segundo, California, before moving to Hawthorne, California."
 
     # Initialize the EWCPipeWrapper with the NER pipe and original labeled examples
-    wrapped_ner = EWCPipeWrapper(ner, [Example.from_dict(nlp.make_doc(text), annotations) for text, annotations in original_spacy_labels])
+    wrapped_ner = create_ewc_pipe(ner, [Example.from_dict(nlp.make_doc(text), annotations) for text, annotations in original_spacy_labels])
 
     # Define the training data as a list of Examples
     examples = [Example.from_dict(nlp.make_doc(text), ann) for text, ann in training_data]

@@ -1,9 +1,10 @@
 import unittest
 import spacy
 from spacy.training import Example
+from spacy_ewc import EWC
 from data_examples.original_spacy_labels import original_spacy_labels
 from data_examples.training_data import training_data
-from spacy_wrapper.ewc_spacy_wrapper import EWCPipeWrapper
+from spacy_wrapper.ewc_spacy_wrapper import create_ewc_pipe
 from utils.extract_labels import extract_labels
 from thinc.api import Adam
 
@@ -31,7 +32,7 @@ class TestEWCIntegrationWithSpacyWrapper(unittest.TestCase):
 
         # Initialize the EWC instance with retraining
 
-        ner = EWCPipeWrapper(ner, [Example.from_dict(self.nlp.make_doc(
+        ner = create_ewc_pipe(ner, [Example.from_dict(self.nlp.make_doc(
             text), annotations) for text, annotations in self.original_spacy_labels])
 
     def test_train_nlp_with_ewc_integration(self):
@@ -63,7 +64,6 @@ class TestEWCIntegrationWithSpacyWrapper(unittest.TestCase):
 
         ewc_ner_doc = self.nlp(self.test_sentence)
         self.assertEqual(original_ner_doc.text, ewc_ner_doc.text)
-
 
         original_ner_labels = set(
             [ent.label_ for ent in original_ner_doc.ents])
