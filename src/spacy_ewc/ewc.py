@@ -12,14 +12,50 @@ logger = logging.getLogger(__name__)
 
 
 class EWC:
+    """
+    The EWC (Elastic Weight Consolidation) class implements the EWC algorithm to prevent catastrophic forgetting
+    in neural networks during sequential learning tasks. It captures the model's parameters after training on the first task,
+    computes the Fisher Information Matrix to estimate the importance of each parameter, and applies a penalty to the loss function
+    during subsequent training to retain important parameters.
+
+    References:
+    - Kirkpatrick, J., Pascanu, R., Rabinowitz, N. C., Veness, J., Desjardins, G., Rusu, A. A., ... & Hadsell, R. (2017).
+      Overcoming catastrophic forgetting in neural networks. Proceedings of the National Academy of Sciences, 114(13), 3521-3526.
+      (https://arxiv.org/abs/1612.00796)
+    """
 
     model_type = Union[Language, TrainablePipe]
 
     # ===== Initialization and Setup =====
     def __init__(self, pipe: model_type, data: List[Example], *, pipe_name: Optional[str] = None):
         """
-        Initialize the EWC class by capturing the model's parameters after training
-        on the first task, computing the Fisher Information Matrix, and setting up the pipeline.
+        Initialize the EWC instance by capturing the model's parameters after training on the first task,
+        computing the Fisher Information Matrix (FIM), and setting up the pipeline.
+
+        Parameters:
+        - pipe (Union[Language, TrainablePipe]): The spaCy Language model or a TrainablePipe component.
+        - data (List[Example]): The list of training examples used to compute the Fisher Information Matrix.
+        - pipe_name (Optional[str]): The name of the pipe component if `pipe` is a Language model (default is 'ner').
+
+        The initialization performs the following steps:
+        1. Validates the type of the provided pipe.
+        2. Retrieves the TrainablePipe component from the Language model if necessary.
+        3. Captures the initial model parameters (θ*), which will serve as a reference for important parameters.
+        4. Computes the Fisher Information Matrix (F), which estimates the importance of each parameter based on its
+           contribution to the loss function.
+
+        Mathematical Formulation:
+        - θ*: The parameters of the model after training on the first task.
+        - F: The Fisher Information Matrix, where each diagonal element F_i estimates the importance of parameter θ_i.
+
+        Reference:
+        - The Fisher Information Matrix is computed as the expected value of the squared gradients of the loss function
+          with respect to the model parameters, evaluated on the data from the first task.
+
+        Raises:
+        - ValueError: If the pipe is not an instance of Language or TrainablePipe.
+        - ValueError: If initial model parameters (θ*) are not set.
+        - ValueError: If the Fisher Information Matrix (F) is not computed.
         """
         logger.info("Initializing EWC instance.")
 
@@ -60,7 +96,17 @@ class EWC:
 
     def _validate_initialization(self, function_name: str = None):
         """
-        Check that the Fisher Information Matrix and theta_star parameters are initialized.
+        Validate that the Fisher Information Matrix and the initial parameters θ* are initialized.
+
+        Parameters:
+        - function_name (str): The name of the function calling this validation (optional).
+
+        Raises:
+        - ValueError: If the Fisher Information Matrix (F) has not been computed.
+        - ValueError: If the initial model parameters (θ*) are not set.
+
+        This method ensures that the necessary components for EWC computations are available before proceeding
+        with penalty calculations or gradient updates.
         """
         if not self.fisher_matrix:
             raise ValueError("Fisher Information Matrix has not been computed." +
@@ -73,12 +119,23 @@ class EWC:
 
     def _capture_current_parameters(self, copy=False) -> VectorDict:
         """
-        Retrieve the current model parameters, with an option to copy or reference them.
+        Retrieve the current model parameters θ, with an option to copy or reference them.
+
+        Parameters:
+        - copy (bool): If True, returns a copy of the parameters; otherwise, returns references.
+
+        Returns:
+        - current_params (VectorDict): A dictionary of current model parameters.
+
+        The parameters are stored in a VectorDict with keys formatted as "{layer.name}_{param_name}".
+
+        This method is used to capture the model's parameters at various stages, such as after training on
+        a task, to compare against θ* during penalty computation.
         """
         logger.info("Retrieving current model parameters.")
         current_params = VectorDict()
         ner_model: Model = self.pipe.model
-        for layer in ner_model.walk():
+        for layer in ner_model.layers:
             for name in layer.param_names:
                 # Conditionally copy or keep reference based on the 'copy' parameter
                 try:
@@ -97,8 +154,36 @@ class EWC:
 
     def _compute_fisher_matrix(self, examples: List[Example]) -> VectorDict:
         """
-        Compute the Fisher Information Matrix for the model based on the training examples.
-        This matrix estimates parameter importance for knowledge retention.
+        Compute the Fisher Information Matrix (F) for the model based on the training examples.
+
+        Parameters:
+        - examples (List[Example]): The list of training examples from the first task.
+
+        Returns:
+        - fisher_matrix (VectorDict): A dictionary representing the Fisher Information Matrix.
+
+        The Fisher Information Matrix estimates the importance of each parameter θ_i by calculating
+        the expected value of the squared gradients of the loss function L with respect to θ_i.
+
+        Mathematical Formulation:
+        - For each parameter θ_i, compute:
+          F_i = E_x[(∂L(x; θ)/∂θ_i)^2]
+  
+        - Where E_x denotes the expectation over the data samples x.
+
+        
+
+        Implementation Details:
+        - The method performs forward and backward passes over the training data to accumulate gradients.
+        - Gradients are squared and summed to approximate the Fisher Information Matrix.
+        - The accumulated gradients are averaged over the number of batches to obtain the final FIM.
+
+        Reference:
+        - The use of the diagonal approximation of the Fisher Information Matrix as in the original EWC paper:
+          Kirkpatrick et al., 2017.
+
+        Raises:
+        - ValueError: If no batches yield positive loss, indicating the Fisher Information Matrix cannot be computed.
         """
         logger.info("Computing Fisher Information Matrix.")
 
@@ -127,20 +212,21 @@ class EWC:
                 logger.warning("Skipping batch with no or zero loss.")
                 continue
 
-            for layer in cast(Model, self.pipe.model).walk():
+            for layer in cast(Model, self.pipe.model).layers:
                 # Retrieve gradient information for each parameter
                 for (_, name), (_, grad) in layer.get_gradients().items():
                     if name not in layer.param_names:
                         continue
-
                     # Square the gradient and add to the Fisher Information Matrix
                     grad = ops.asarray(grad).copy() ** 2
+                    key = f"{layer.name}_{name}"
                     try:
-                        fisher_matrix[f"{layer.name}_{
-                            name}"] = fisher_matrix.get(name, 0) + grad
+                        if key in fisher_matrix:
+                            fisher_matrix[key] += grad
+                        else:
+                            fisher_matrix[key] = grad
                     except ValueError as e:
-                        logger.error(
-                            f"Error updating Fisher Matrix for {name}: {e}")
+                        logger.error(f"Error updating Fisher Matrix for {key}: {e}")
                         continue
 
             num_batches += 1
@@ -161,7 +247,27 @@ class EWC:
 
     def compute_ewc_penalty(self) -> float:
         """
-        Calculate the EWC penalty term for the loss function, based on parameter importance.
+        Calculate the EWC penalty term Ω(θ) for the loss function, based on parameter importance.
+
+        Returns:
+        - ewc_penalty (float): The scalar value of the EWC penalty.
+
+        The EWC penalty encourages the model to retain important parameters learned from previous tasks.
+
+        Mathematical Formulation:
+        - Ω(θ) = (1/2) * Σ_i F_i * (θ_i - θ_i^*)^2
+        - Where:
+          - θ_i: Current parameter value.
+          - θ_i^*: Parameter value after training on the first task.
+          - F_i: Fisher Information for parameter θ_i.
+
+        The penalty term is added to the loss function to penalize deviations from θ_i^* proportional to F_i.
+
+        Reference:
+        - Equation (3) in Kirkpatrick et al., 2017.
+
+        Raises:
+        - ValueError: If the Fisher Information Matrix or initial parameters are not initialized.
         """
         self._validate_initialization("compute_ewc_penalty")
         logger.info("Calculating loss penalty.")
@@ -176,17 +282,37 @@ class EWC:
 
             # Compute the penalty if shapes match
             if current_param.shape == theta_star_param.shape == fisher_param.shape:
-                penalty_contrib = (
-                    fisher_param * (current_param - theta_star_param) ** 2).sum()
+                # Compute (θ_i - θ_i^*)^2
+                param_diff_squared = (current_param - theta_star_param) ** 2
+                # Compute F_i * (θ_i - θ_i^*)^2
+                penalty_contrib = (fisher_param * param_diff_squared).sum()
                 ewc_penalty += penalty_contrib
                 logger.debug(f"Penalty contribution for {
                              key}: {penalty_contrib}")
+
+        # Multiply by 0.5 as per the formula
+        ewc_penalty *= 0.5
 
         return float(ewc_penalty)
 
     def compute_gradient_penalty(self):
         """
         Calculate the gradient penalty to be applied to current parameters based on the Fisher Information Matrix.
+
+        Returns:
+        - ewc_penalty_gradients (VectorDict): A dictionary of gradient penalties for each parameter.
+
+        The gradient penalty is computed as the derivative of the EWC penalty term with respect to θ_i.
+
+        Mathematical Formulation:
+        - ∂Ω(θ)/∂θ_i = F_i * (θ_i - θ_i^*)
+        - This gradient penalty is added to the parameter gradients during optimization.
+
+        Reference:
+        - The gradient of the EWC penalty as used in the optimization process in Kirkpatrick et al., 2017.
+
+        Raises:
+        - ValueError: If the Fisher Information Matrix or initial parameters are not initialized.
         """
         self._validate_initialization("compute_gradient_penalty")
         logger.info("Calculating gradient penalty.")
@@ -200,26 +326,48 @@ class EWC:
             fisher_param = self.fisher_matrix[key]
 
             # Calculate the EWC gradient penalty
-            ewc_penalty = fisher_param * \
-                (current_param.copy() - theta_star_param)
+            # ∂Ω(θ)/∂θ_i = F_i * (θ_i - θ_i^*)
+            ewc_penalty = fisher_param * (current_param - theta_star_param)
             ewc_penalty_gradients[key] = ewc_penalty
             logger.debug(f"Gradient penalty for {key}: {ewc_penalty}")
 
         return ewc_penalty_gradients
 
     # ===== Gradient Application =====
+
     def apply_ewc_penalty_to_gradients(self, lambda_=1000):
         """
-        Apply the EWC penalty directly to the model's gradients.
+        Apply the EWC penalty directly to the model's gradients during training.
+
+        Parameters:
+        - lambda_ (float): The regularization strength that scales the EWC penalty (default is 1000).
+
+        This method modifies the gradients of the model's parameters in-place by adding the scaled EWC gradient penalty.
+
+        Mathematical Formulation:
+        - For each parameter θ_i, update the gradient g_i as:
+          g_i ← g_i + λ * F_i * (θ_i - θ_i^*)
+        - Where:
+          - g_i: Original gradient of parameter θ_i.
+          - λ: Regularization strength (lambda_).
+          - F_i: Fisher Information for parameter θ_i.
+          - θ_i^*: Parameter value after training on the first task.
+
+        Reference:
+        - The application of the EWC gradient penalty during optimization as per Kirkpatrick et al., 2017.
+
+        Raises:
+        - ValueError: If the Fisher Information Matrix or initial parameters are not initialized.
+        - ValueError: If there are mismatches in parameter shapes or data types.
         """
         self._validate_initialization("apply_ewc_penalty_to_gradients")
         logger.info(
             f"Applying EWC penalty to gradients with lambda={lambda_}.")
 
-        ner_model = self.pipe.model
+        ner_model: Model = self.pipe.model
         current_params = self._capture_current_parameters()
 
-        for layer in ner_model.walk():
+        for layer in ner_model.layers:
             for (_, name), (_, grad) in layer.get_gradients().items():
                 if name not in layer.param_names:
                     continue
@@ -237,22 +385,41 @@ class EWC:
                     logger.info(f"Shape mismatch for {key_name}, skipping.")
                     continue
 
-                if theta_current.dtype != theta_star_param.dtype != fisher_param.dtype != grad.dtype:
+                if theta_current.dtype != theta_star_param.dtype or theta_current.dtype != fisher_param.dtype or theta_current.dtype != grad.dtype:
                     logger.info(f"Dtype mismatch for {key_name}, skipping.")
                     continue
 
                 # Calculate and apply the EWC penalty to the gradient
+                # Update gradient: g_i ← g_i + λ * F_i * (θ_i - θ_i^*)
                 ewc_penalty = fisher_param * (theta_current - theta_star_param)
                 grad += (lambda_ * ewc_penalty)
                 logger.debug(f"Applied penalty for {key_name}: {ewc_penalty}")
 
     # ===== Loss Calculation =====
+
     def ewc_loss(self, task_loss, lambda_=1000):
         """
-        Calculate the total EWC loss by combining the task loss with the EWC penalty term.
+        Calculate the total EWC loss by combining the task-specific loss with the EWC penalty term.
+
+        Parameters:
+        - task_loss (float): The loss value from the current task.
+        - lambda_ (float): The regularization strength that scales the EWC penalty (default is 1000).
+
+        Returns:
+        - ewc_adjusted_loss (float): The total loss adjusted with the EWC penalty.
+
+        Mathematical Formulation:
+        - L_total = L_task + (λ / 2) * Ω(θ)
+        - Where:
+          - L_task: Loss from the current task.
+          - Ω(θ) = Σ_i F_i * (θ_i - θ_i^*)^2
+
+        Reference:
+        - The total loss function including the EWC penalty as per Kirkpatrick et al., 2017.
+
         """
         logger.info("Calculating EWC-adjusted loss.")
-        ewc_adjusted_loss = task_loss + \
-            (lambda_ * 0.5 * self.compute_ewc_penalty())
+        ewc_penalty = self.compute_ewc_penalty()
+        ewc_adjusted_loss = task_loss + (lambda_ * ewc_penalty)
         logger.debug(f"Computed EWC loss: {ewc_adjusted_loss}")
         return ewc_adjusted_loss
