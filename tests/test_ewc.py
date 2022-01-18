@@ -1,13 +1,15 @@
 import unittest
 import spacy
-from spacy_ewc import EWC
+from spacy_ewc import EWC, VectorDict
 from spacy.training import Example
 from data_examples.original_spacy_labels import original_spacy_labels
 import logging
+import numpy as np
 
 
 # Define a logger that matches the module where EWC is used
-logger = logging.getLogger("spacy_ewc.ewc")  # Adjust to match the EWC module path
+# Adjust to match the EWC module path
+logger = logging.getLogger("spacy_ewc.ewc")
 
 
 class TestEWC(unittest.TestCase):
@@ -173,8 +175,6 @@ class TestEWC(unittest.TestCase):
         self.assertFalse(all(gradients_comparisons),
                          "At least one gradient should be modified by apply_ewc_penalty_to_gradients.")
 
-
-
     def test_validate_initialization(self):
         # Test _validate_initialization by manually setting fisher_matrix and theta_star to None
         self.ewc.fisher_matrix = None
@@ -182,15 +182,17 @@ class TestEWC(unittest.TestCase):
 
         with self.assertRaises(ValueError) as context:
             self.ewc._validate_initialization()
-        
+
         # Check if both error messages are present for fisher_matrix and theta_star
-        self.assertIn("Fisher Information Matrix has not been computed", str(context.exception))
-        self.ewc.fisher_matrix = {"layer_name":[0]}
+        self.assertIn(
+            "Fisher Information Matrix has not been computed", str(context.exception))
+        self.ewc.fisher_matrix = {"layer_name": [0]}
 
         with self.assertRaises(ValueError) as context:
             self.ewc._validate_initialization()
 
-        self.assertIn("Initial model parameters are not set", str(context.exception))
+        self.assertIn("Initial model parameters are not set",
+                      str(context.exception))
 
     def test_fisher_matrix_no_batches_yielded_positive_loss(self):
         # Test that _compute_fisher_matrix raises an error if no batches yield positive loss
@@ -200,8 +202,8 @@ class TestEWC(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             self.ewc = EWC(self.nlp, empty_data)
 
-        self.assertIn("No batches yielded positive loss; Fisher Information Matrix not computed.", str(context.exception))
-
+        self.assertIn("No batches yielded positive loss; Fisher Information Matrix not computed.", str(
+            context.exception))
 
     def test_apply_ewc_penalty_to_gradients_missing_key_message(self):
         # Temporarily remove a key from fisher_matrix to test missing key handling
@@ -211,7 +213,8 @@ class TestEWC(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
 
-        self.assertIn(f"Invalid key_name found '{missing_key}'", str(context.exception))
+        self.assertIn(f"Invalid key_name found '{
+                      missing_key}'", str(context.exception))
 
     def test_apply_ewc_penalty_to_gradients_incompatible_shapes_logging(self):
         # Modify fisher_matrix to have an incompatible shape for testing
@@ -223,21 +226,24 @@ class TestEWC(unittest.TestCase):
             self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
 
         # Check that the log captured the warning about incompatible shapes
-        self.assertTrue(any("Shape mismatch" in message for message in log.output))
+        self.assertTrue(
+            any("Shape mismatch" in message for message in log.output))
 
         # Restore original shape for cleanup
-        self.ewc.fisher_matrix[key] = self.ewc.fisher_matrix[key].reshape(original_shape)
-
+        self.ewc.fisher_matrix[key] = self.ewc.fisher_matrix[key].reshape(
+            original_shape)
 
     def test_apply_ewc_penalty_to_gradients_incompatible_dtypes(self):
         # Change the dtype of a parameter to test incompatible dtypes handling
         key = list(self.ewc.fisher_matrix.keys())[-1]
-        self.ewc.fisher_matrix[key] = self.ewc.fisher_matrix[key].astype("float32")  # Change dtype
+        self.ewc.fisher_matrix[key] = self.ewc.fisher_matrix[key].astype(
+            "float32")  # Change dtype
 
         try:
             self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
         except Exception as e:
-            self.fail(f"apply_ewc_penalty_to_gradients raised an exception for incompatible dtypes: {e}")
+            self.fail(
+                f"apply_ewc_penalty_to_gradients raised an exception for incompatible dtypes: {e}")
 
     def test_apply_ewc_penalty_to_gradients_modified_gradients(self):
         # Ensure that gradients are modified correctly in apply_ewc_penalty_to_gradients
@@ -266,6 +272,35 @@ class TestEWC(unittest.TestCase):
     def tearDown(self):
         del self.ewc
         del self.nlp
+
+
+class TestVectorDict(unittest.TestCase):
+
+    def setUp(self):
+        """Set up a sample VectorDict instance for testing."""
+        self.vector_dict = VectorDict()
+        # Populate with example key-value pairs
+        self.vector_dict['key1'] = np.array([1.0, 2.0, 3.0])
+        self.vector_dict['key2'] = np.array([4.0, 5.0, 6.0])
+
+    def test_str(self):
+        self.assertEqual(str(self.vector_dict), "key1: [1.0, 2.0, 3.0]...\nkey2: [4.0, 5.0, 6.0]...")
+        
+        self.assertEqual(str(VectorDict()), "{}")
+
+
+    def test_repr(self):
+        """Test the __repr__ method for correct string representation."""
+        # Expected format for the __repr__ output (based on the VectorDict formatting)
+        expected_repr = "VectorDict({ key1: [1.0, 2.0, 3.0]..., key2: [4.0, 5.0, 6.0]... })"
+
+        # Call the __repr__ method
+        actual_repr = repr(self.vector_dict)
+
+        # Check if the actual repr output matches the expected format
+        self.assertEqual(actual_repr, expected_repr)
+
+
 
 if __name__ == '__main__':
     unittest.main()
