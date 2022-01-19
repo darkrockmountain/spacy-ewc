@@ -27,7 +27,14 @@ class EWC:
     model_type = Union[Language, TrainablePipe]
 
     # ===== Initialization and Setup =====
-    def __init__(self, pipe: model_type, data: List[Example], *, pipe_name: Optional[str] = None):
+    def __init__(
+        self,
+        pipe: model_type,
+        data: List[Example],
+        *,
+        lambda_: float = 1000.0,
+        pipe_name: Optional[str] = None
+    ):
         """
         Initialize the EWC instance by capturing the model's parameters after training on the first task,
         computing the Fisher Information Matrix (FIM), and setting up the pipeline.
@@ -35,6 +42,7 @@ class EWC:
         Parameters:
         - pipe (Union[Language, TrainablePipe]): The spaCy Language model or a TrainablePipe component.
         - data (List[Example]): The list of training examples used to compute the Fisher Information Matrix.
+        - lambda_ (float): The regularization strength that scales the EWC penalty (default is 1000.0).
         - pipe_name (Optional[str]): The name of the pipe component if `pipe` is a Language model (default is 'ner').
 
         The initialization performs the following steps:
@@ -47,6 +55,7 @@ class EWC:
         Mathematical Formulation:
         - θ*: The parameters of the model after training on the first task.
         - F: The Fisher Information Matrix, where each diagonal element F_i estimates the importance of parameter θ_i.
+        - λ (lambda_): The regularization strength controlling the trade-off between retaining old knowledge and learning new information.
 
         Reference:
         - The Fisher Information Matrix is computed as the expected value of the squared gradients of the loss function
@@ -64,8 +73,7 @@ class EWC:
         if not isinstance(pipe, allowed_classes):
             allowed_class_names = [cls.__name__ for cls in allowed_classes]
             raise ValueError(
-                f"pipe param can only be an instance of one of: {
-                    allowed_class_names}"
+                f"pipe param can only be an instance of one of: {allowed_class_names}"
             )
 
         self.pipe: TrainablePipe = pipe
@@ -76,9 +84,11 @@ class EWC:
                 pipe_name = "ner"
             self.pipe = self.pipe.get_pipe(pipe_name)
 
+        # Set the regularization strength
+        self.lambda_ = lambda_
+
         # Capture parameters after training on the first task
-        self.theta_star: VectorDict = self._capture_current_parameters(
-            copy=True)
+        self.theta_star: VectorDict = self._capture_current_parameters(copy=True)
         logger.debug("Captured initial model parameters (theta_star).")
 
         # Ensure theta_star has been set correctly
@@ -91,8 +101,8 @@ class EWC:
 
         # Ensure the Fisher Information Matrix is computed
         if not self.fisher_matrix:
-            raise ValueError(
-                "Fisher Information Matrix has not been computed.")
+            raise ValueError("Fisher Information Matrix has not been computed.")
+
 
     def _validate_initialization(self, function_name: str = None):
         """
@@ -114,6 +124,17 @@ class EWC:
         if not self.theta_star:
             raise ValueError("Initial model parameters are not set." +
                              (f" Ensure `self.theta_star` has been initialized with start parameters before calling `{function_name}()`." if function_name else ""))
+
+    def set_lambda(self, new_lambda: float):
+        """
+        Update the regularization strength lambda_.
+
+        Parameters:
+        - new_lambda (float): The new value for lambda_.
+        """
+        logger.info(f"Updating lambda_ from {self.lambda_} to {new_lambda}.")
+        self.lambda_ = new_lambda
+
 
     # ===== Parameter Management =====
 
@@ -335,12 +356,9 @@ class EWC:
 
     # ===== Gradient Application =====
 
-    def apply_ewc_penalty_to_gradients(self, lambda_=1000):
+    def apply_ewc_penalty_to_gradients(self):
         """
         Apply the EWC penalty directly to the model's gradients during training.
-
-        Parameters:
-        - lambda_ (float): The regularization strength that scales the EWC penalty (default is 1000).
 
         This method modifies the gradients of the model's parameters in-place by adding the scaled EWC gradient penalty.
 
@@ -361,8 +379,7 @@ class EWC:
         - ValueError: If there are mismatches in parameter shapes or data types.
         """
         self._validate_initialization("apply_ewc_penalty_to_gradients")
-        logger.info(
-            f"Applying EWC penalty to gradients with lambda={lambda_}.")
+        logger.info(f"Applying EWC penalty to gradients with lambda={self.lambda_}.")
 
         ner_model: Model = self.pipe.model
         current_params = self._capture_current_parameters()
@@ -392,12 +409,12 @@ class EWC:
                 # Calculate and apply the EWC penalty to the gradient
                 # Update gradient: g_i ← g_i + λ * F_i * (θ_i - θ_i^*)
                 ewc_penalty = fisher_param * (theta_current - theta_star_param)
-                grad += (lambda_ * ewc_penalty)
+                grad += (self.lambda_ * ewc_penalty)
                 logger.debug(f"Applied penalty for {key_name}: {ewc_penalty}")
 
     # ===== Loss Calculation =====
 
-    def ewc_loss(self, task_loss, lambda_=1000):
+    def ewc_loss(self, task_loss):
         """
         Calculate the total EWC loss by combining the task-specific loss with the EWC penalty term.
 
@@ -420,6 +437,6 @@ class EWC:
         """
         logger.info("Calculating EWC-adjusted loss.")
         ewc_penalty = self.compute_ewc_penalty()
-        ewc_adjusted_loss = task_loss + (lambda_ * ewc_penalty)
+        ewc_adjusted_loss = task_loss + (self.lambda_ * ewc_penalty)
         logger.debug(f"Computed EWC loss: {ewc_adjusted_loss}")
         return ewc_adjusted_loss

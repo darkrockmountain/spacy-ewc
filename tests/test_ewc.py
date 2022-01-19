@@ -3,6 +3,7 @@ import spacy
 from spacy_ewc import EWC, VectorDict
 from spacy.training import Example
 from data_examples.original_spacy_labels import original_spacy_labels
+from data_examples.training_data import training_data
 import logging
 import numpy as np
 
@@ -24,7 +25,7 @@ class TestEWC(unittest.TestCase):
         # Train the model
         self.nlp.update(self.train_data)
         # Create an instance of the EWC class
-        self.ewc = EWC(self.nlp, self.train_data)
+        self.ewc = EWC(self.nlp, self.train_data, lambda_=500)
 
     def test_initial_fisher_matrix_not_none(self):
         # Ensure that the Fisher matrix is computed after training on initial task
@@ -65,7 +66,7 @@ class TestEWC(unittest.TestCase):
     def test_ewc_loss_calculation(self):
         # Test the EWC loss function
         mock_task_loss = 0.5
-        ewc_loss = self.ewc.ewc_loss(mock_task_loss, lambda_=1000)
+        ewc_loss = self.ewc.ewc_loss(mock_task_loss)
         self.assertIsInstance(
             ewc_loss, float, "ewc_loss should return a float.")
         self.assertGreaterEqual(
@@ -115,7 +116,7 @@ class TestEWC(unittest.TestCase):
         del self.ewc.theta_star[missing_key]
 
         with self.assertRaises(ValueError) as context:
-            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+            self.ewc.apply_ewc_penalty_to_gradients()
 
         self.assertIn(missing_key, str(context.exception),
                       "apply_ewc_penalty_to_gradients should raise an error when a required key is missing.")
@@ -129,7 +130,7 @@ class TestEWC(unittest.TestCase):
 
         # Run apply_ewc_penalty_to_gradients and ensure it skips incompatible shapes without error
         with self.assertRaises(Exception) as e:
-            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+            self.ewc.apply_ewc_penalty_to_gradients()
             self.assertAlmostEqual(
                 e, f"apply_ewc_penalty_to_gradients raised an exception for incompatible shapes")
 
@@ -145,7 +146,7 @@ class TestEWC(unittest.TestCase):
 
         # Run apply_ewc_penalty_to_gradients and ensure it skips incompatible types without error
         try:
-            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+            self.ewc.apply_ewc_penalty_to_gradients()
         except Exception as e:
             self.fail(
                 f"apply_ewc_penalty_to_gradients raised an exception for incompatible types: {e}")
@@ -159,7 +160,7 @@ class TestEWC(unittest.TestCase):
                 initial_gradients[key] = grad.copy()
 
         # Apply EWC gradient calculation
-        self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+        self.ewc.apply_ewc_penalty_to_gradients()
 
         gradients_comparisons = []
 
@@ -200,7 +201,7 @@ class TestEWC(unittest.TestCase):
         empty_data = []
 
         with self.assertRaises(ValueError) as context:
-            self.ewc = EWC(self.nlp, empty_data)
+            EWC(self.nlp, empty_data)
 
         self.assertIn("No batches yielded positive loss; Fisher Information Matrix not computed.", str(
             context.exception))
@@ -211,7 +212,7 @@ class TestEWC(unittest.TestCase):
         del self.ewc.fisher_matrix[missing_key]
 
         with self.assertRaises(ValueError) as context:
-            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+            self.ewc.apply_ewc_penalty_to_gradients()
 
         self.assertIn(f"Invalid key_name found '{
                       missing_key}'", str(context.exception))
@@ -223,7 +224,7 @@ class TestEWC(unittest.TestCase):
         self.ewc.fisher_matrix[key] = self.ewc.fisher_matrix[key].ravel()
 
         with self.assertLogs(logger, level='INFO') as log:
-            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+            self.ewc.apply_ewc_penalty_to_gradients()
 
         # Check that the log captured the warning about incompatible shapes
         self.assertTrue(
@@ -240,7 +241,7 @@ class TestEWC(unittest.TestCase):
             "float32")  # Change dtype
 
         try:
-            self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+            self.ewc.apply_ewc_penalty_to_gradients()
         except Exception as e:
             self.fail(
                 f"apply_ewc_penalty_to_gradients raised an exception for incompatible dtypes: {e}")
@@ -254,7 +255,7 @@ class TestEWC(unittest.TestCase):
                 initial_gradients[key] = grad.copy()
 
         # Apply EWC gradient calculation
-        self.ewc.apply_ewc_penalty_to_gradients(lambda_=1000)
+        self.ewc.apply_ewc_penalty_to_gradients()
 
         gradients_modified = False
 
@@ -267,7 +268,91 @@ class TestEWC(unittest.TestCase):
                         gradients_modified = True
                         break
 
-        self.assertTrue(gradients_modified, "Gradients should be modified by apply_ewc_penalty_to_gradients.")
+        self.assertTrue(
+            gradients_modified, "Gradients should be modified by apply_ewc_penalty_to_gradients.")
+
+    def test_lambda_initialization(self):
+        # Check if the lambda parameter was initialized correctly
+        self.assertEqual(self.ewc.lambda_, 500,
+                         "Lambda should be initialized to the specified value.")
+
+    def test_set_lambda_updates_lambda_value(self):
+        # Test that set_lambda properly updates the lambda_ parameter
+        self.ewc.set_lambda(2000)
+        self.assertEqual(self.ewc.lambda_, 2000,
+                         "Lambda should update to the new value provided.")
+
+    def test_apply_ewc_penalty_to_gradients_with_different_lambda_values(self):
+        # Ensure that gradients are modified according to lambda_ value
+        initial_lambda = self.ewc.lambda_
+
+        # Capture initial gradients
+        initial_gradients = {}
+        for layer in self.nlp.get_pipe("ner").model.walk():
+            for (_, name), (_, grad) in layer.get_gradients().items():
+                key = f"{layer.name}_{name}"
+                initial_gradients[key] = grad.copy()
+
+        # Apply EWC penalty with initial lambda
+        self.ewc.apply_ewc_penalty_to_gradients()
+
+        # Check that gradients were modified
+        gradients_changed_with_initial_lambda = False
+        for layer in self.nlp.get_pipe("ner").model.walk():
+            for (_, name), (_, grad) in layer.get_gradients().items():
+                key = f"{layer.name}_{name}"
+                if key in initial_gradients:
+                    if not np.array_equal(initial_gradients[key], grad):
+                        gradients_changed_with_initial_lambda = True
+                        break
+        self.assertTrue(gradients_changed_with_initial_lambda,
+                        "Gradients should change when apply_ewc_penalty_to_gradients is applied.")
+
+        # Set a different lambda and reapply
+        self.ewc.set_lambda(1000)
+        self.ewc.apply_ewc_penalty_to_gradients()
+
+        # Check that gradients have been modified according to the new lambda value
+        gradients_changed_with_new_lambda = False
+        for layer in self.nlp.get_pipe("ner").model.walk():
+            for (_, name), (_, grad) in layer.get_gradients().items():
+                key = f"{layer.name}_{name}"
+                if key in initial_gradients:
+                    if not np.array_equal(initial_gradients[key], grad):
+                        gradients_changed_with_new_lambda = True
+                        break
+        self.assertTrue(gradients_changed_with_new_lambda,
+                        "Gradients should change according to the new lambda value in apply_ewc_penalty_to_gradients.")
+
+    def test_ewc_loss_calculation_with_different_lambda_values(self):
+        # Test EWC loss with different lambda values
+        mock_task_loss = 0.5
+
+
+         # Mock training data for the initial task
+        self.train_data = [Example.from_dict(self.nlp.make_doc(
+            text), annotations) for text, annotations in training_data]
+
+        # Train the model
+        self.nlp.update(self.train_data)
+
+        # Calculate EWC loss with initial lambda
+        initial_ewc_loss = self.ewc.ewc_loss(mock_task_loss)
+
+        # Set a new lambda and calculate EWC loss again
+        self.ewc.set_lambda(2000)
+        new_ewc_loss = self.ewc.ewc_loss(mock_task_loss)
+
+        self.assertNotEqual(initial_ewc_loss, new_ewc_loss,
+                            "EWC loss should differ when lambda is changed.")
+
+    def test_set_lambda_logs_correctly(self):
+        # Check logging output when setting lambda
+        with self.assertLogs(logger, level='INFO') as log:
+            self.ewc.set_lambda(1500)
+
+        self.assertIn("Updating lambda_",
+                      log.output[0], "The log should contain the lambda update message.")
 
     def tearDown(self):
         del self.ewc
@@ -284,10 +369,10 @@ class TestVectorDict(unittest.TestCase):
         self.vector_dict['key2'] = np.array([4.0, 5.0, 6.0])
 
     def test_str(self):
-        self.assertEqual(str(self.vector_dict), "key1: [1.0, 2.0, 3.0]...\nkey2: [4.0, 5.0, 6.0]...")
-        
-        self.assertEqual(str(VectorDict()), "{}")
+        self.assertEqual(str(self.vector_dict),
+                         "key1: [1.0, 2.0, 3.0]...\nkey2: [4.0, 5.0, 6.0]...")
 
+        self.assertEqual(str(VectorDict()), "{}")
 
     def test_repr(self):
         """Test the __repr__ method for correct string representation."""
@@ -299,7 +384,6 @@ class TestVectorDict(unittest.TestCase):
 
         # Check if the actual repr output matches the expected format
         self.assertEqual(actual_repr, expected_repr)
-
 
 
 if __name__ == '__main__':

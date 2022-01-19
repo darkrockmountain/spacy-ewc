@@ -35,7 +35,6 @@ class TestEWCIntegrationWithSpacyWrapper(unittest.TestCase):
         ner = create_ewc_pipe(ner, [Example.from_dict(self.nlp.make_doc(
             text), annotations) for text, annotations in self.original_spacy_labels])
 
-
     def test_train_nlp_with_ewc_integration(self):
         # Define a dictionary to hold the losses
 
@@ -85,7 +84,7 @@ class TestEWCIntegrationWithSpacyWrapper(unittest.TestCase):
 
         create_ewc_pipe(self.nlp, [Example.from_dict(self.nlp.make_doc(
             text), annotations) for text, annotations in self.original_spacy_labels])
-        
+
         original_ner_doc = self.nlp(self.test_sentence)
 
         sgd = None
@@ -128,16 +127,13 @@ class TestEWCIntegrationWithSpacyWrapper(unittest.TestCase):
         self.assertLess(len(not_changed_labels), len(original_ner_labels))
         self.assertLess(len(not_changed_labels), len(ewc_ner_labels))
 
-
     def test_train_nlp_with_not_accepted_class(self):
         with self.assertRaises(ValueError) as not_accepted_class_error:
             create_ewc_pipe(None, [Example.from_dict(self.nlp.make_doc(
-            text), annotations) for text, annotations in self.original_spacy_labels])
-        
-        self.assertEqual(str(not_accepted_class_error.exception), f"pipe param can only be an instance of one of: ['Language', 'TrainablePipe']")
+                text), annotations) for text, annotations in self.original_spacy_labels])
 
-
-
+        self.assertEqual(str(not_accepted_class_error.exception),
+                         f"pipe param can only be an instance of one of: ['Language', 'TrainablePipe']")
 
     def tearDown(self):
         del self.nlp
