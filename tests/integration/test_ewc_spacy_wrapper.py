@@ -1,12 +1,12 @@
 import unittest
 import spacy
 from spacy.training import Example
-from spacy_ewc import EWC
 from data_examples.original_spacy_labels import original_spacy_labels
 from data_examples.training_data import training_data
 from spacy_wrapper.ewc_spacy_wrapper import create_ewc_pipe
 from utils.extract_labels import extract_labels
-from thinc.api import Adam
+import os
+import shutil
 
 
 class TestEWCIntegrationWithSpacyWrapper(unittest.TestCase):
@@ -34,6 +34,9 @@ class TestEWCIntegrationWithSpacyWrapper(unittest.TestCase):
 
         ner = create_ewc_pipe(ner, [Example.from_dict(self.nlp.make_doc(
             text), annotations) for text, annotations in self.original_spacy_labels])
+
+        # Define a path for saving and loading the model
+        self.model_path = "test_model"
 
     def test_train_nlp_with_ewc_integration(self):
         # Define a dictionary to hold the losses
@@ -135,7 +138,63 @@ class TestEWCIntegrationWithSpacyWrapper(unittest.TestCase):
         self.assertEqual(str(not_accepted_class_error.exception),
                          f"pipe param can only be an instance of one of: ['Language', 'TrainablePipe']")
 
+    def test_train_save_and_restore_model_with_ewc(self):
+
+        # Initial NER recognition on test sentence
+        original_ner_doc = self.nlp(self.test_sentence)
+
+        sgd = None
+        for e in range(10):
+            # Create minibatches using spaCy's utility function
+            batches = spacy.util.minibatch(
+                [
+                    Example.from_dict(self.nlp.make_doc(text), ann)
+                    for text, ann in self.training_data
+                ],
+                size=spacy.util.compounding(4.0, 32.0, 1.001)
+            )
+            for batch in batches:
+                losses = {}
+                # Train the NLP model with EWC applied
+                self.nlp.update(examples=batch, sgd=sgd, losses=losses)
+
+        # Ensure losses were recorded for NER training
+        self.assertIn(
+            "ner", losses, "Losses should include 'ner' key after training.")
+        self.assertGreater(
+            losses["ner"], 0, "NER losses should be greater than zero after training.")
+
+        # Save the model
+        self.nlp.to_disk(self.model_path)
+
+        # Reload the model
+        restored_nlp = spacy.load(self.model_path)
+
+        # Check if the restored model produces similar results
+        restored_ner_doc = restored_nlp(self.test_sentence)
+        self.assertEqual(original_ner_doc.text, restored_ner_doc.text)
+
+        original_ner_labels = set(
+            [ent.label_ for ent in original_ner_doc.ents])
+        restored_ner_labels = set(
+            [ent.label_ for ent in restored_ner_doc.ents])
+
+        # Confirm that labels have been retained post-restoration
+        self.assertNotEqual(original_ner_labels, restored_ner_labels)
+
+        not_changed_labels = restored_ner_labels.difference(
+            self.training_labels)
+        self.assertEqual(restored_ner_labels.intersection(
+            self.training_labels), self.training_labels)
+
+        self.assertGreater(len(not_changed_labels), 0)
+        self.assertLess(len(not_changed_labels), len(original_ner_labels))
+        self.assertLess(len(not_changed_labels), len(restored_ner_labels))
+
     def tearDown(self):
+        # Clean up test output directory and restore warnings
+        if os.path.exists(self.model_path):
+            shutil.rmtree(self.model_path)
         del self.nlp
 
 
