@@ -4,6 +4,7 @@ from spacy_wrapper.ewc_spacy_wrapper import create_ewc_pipe
 from data_examples.training_data import training_data
 from data_examples.original_spacy_labels import original_spacy_labels
 from utils.extract_labels import extract_labels
+from thinc.optimizers import Optimizer
 
 
 def run_ewc_example():
@@ -19,25 +20,29 @@ def run_ewc_example():
         ner.add_label(label)
 
     # Prepare test sentence
-    test_sentence = "Elon Musk founded SpaceX in 2002 as the CEO and lead engineer, investing approximately $100 million of his own money into the company, which was initially based in El Segundo, California, before moving to Hawthorne, California."
+    test_sentence = "Elon Musk founded Space-X in 2002 as the CEO and lead engineer, investing approximately $100 million of his own money into the company, which was initially based in El Segundo, California."
 
     # Initialize the EWCPipeWrapper with the NER pipe and original labeled examples
-    wrapped_ner = create_ewc_pipe(ner, [Example.from_dict(nlp.make_doc(text), annotations) for text, annotations in original_spacy_labels])
+    create_ewc_pipe(ner, [Example.from_dict(nlp.make_doc(
+        text), annotations) for text, annotations in original_spacy_labels])
 
     # Define the training data as a list of Examples
-    examples = [Example.from_dict(nlp.make_doc(text), ann) for text, ann in training_data]
+    examples = [Example.from_dict(nlp.make_doc(text), ann)
+                for text, ann in training_data]
 
-    # Set up optimizer for updating the model
-    optimizer = nlp.initialize()
+    # Set up the optimizer to update the model (or use the default nlp optimizer by passing None).
+    # [Avoid using nlp.initialize(), as it resets the initial parameters and gradients.]
+    optimizer: Optimizer = None
 
     # Train the model using EWC and the wrapped NER component
     for epoch in range(10):  # Define the number of epochs
         losses = {}
-        
+
         # Create batches for training
-        batches = spacy.util.minibatch(examples, size=spacy.util.compounding(4.0, 32.0, 1.001))
+        batches = spacy.util.minibatch(
+            examples, size=spacy.util.compounding(4.0, 32.0, 1.001))
         for batch in batches:
-            wrapped_ner.update(examples=batch, sgd=optimizer, losses=losses)
+            nlp.update(examples=batch, sgd=optimizer, losses=losses)
 
     # Display training loss
     print("Training loss:", losses["ner"])
