@@ -4,9 +4,9 @@ from thinc.api import Model, Optimizer
 from spacy.training import Example
 from spacy.pipeline import TrainablePipe
 from spacy.language import Language
-from spacy_wrapper import EWCModelWrapper, create_ewc_pipe
-from spacy_ewc import EWC
 import numpy as np
+from spacy_ewc.ewc import EWC
+from spacy_ewc.spacy_wrapper import EWCModelWrapper, create_ewc_pipe
 
 
 class TestEWCModelWrapper(unittest.TestCase):
@@ -18,7 +18,8 @@ class TestEWCModelWrapper(unittest.TestCase):
 
         # Instantiate the EWCModelWrapper
         self.ewc_model_wrapper = EWCModelWrapper(
-            self.mock_model, self.mock_penalty_function)
+            self.mock_model, self.mock_penalty_function
+        )
 
     def test_finish_update_calls_penalty_function_and_model_update(self):
         # Mock optimizer
@@ -30,15 +31,14 @@ class TestEWCModelWrapper(unittest.TestCase):
         # Assert that the EWC penalty function was called
         self.mock_penalty_function.assert_called_once()
 
-        # Assert that the underlying model's finish_update was called with optimizer
-        self.mock_model.finish_update.assert_called_once_with(
-            optimizer=mock_optimizer)
+        # Assert that the underlying model's finish_update was called with
+        # optimizer
+        self.mock_model.finish_update.assert_called_once_with(optimizer=mock_optimizer)
 
     def test_getattribute_finish_update_override(self):
         # Access finish_update and confirm it uses EWCModelWrapper's version
         finish_update_method = self.ewc_model_wrapper.finish_update
-        self.assertEqual(finish_update_method,
-                         self.ewc_model_wrapper.finish_update)
+        self.assertEqual(finish_update_method, self.ewc_model_wrapper.finish_update)
 
     def test_getattribute_fallback_to_wrapped_model(self):
         # Mock an attribute in the wrapped model
@@ -100,7 +100,8 @@ class TestCreateEwcPipe(unittest.TestCase):
         self.mock_pipe = MagicMock(spec=TrainablePipe)
         self.mock_pipe.model = self.mocked_model
         self.mock_pipe.update = MagicMock(
-            side_effect=lambda batch, losses, sgd: losses.update({'ner': 1.0}))
+            side_effect=lambda batch, losses, sgd: losses.update({"ner": 1.0})
+        )
 
         # Set up mock training data
         self.mock_data = [Mock(spec=Example)]
@@ -108,19 +109,20 @@ class TestCreateEwcPipe(unittest.TestCase):
         # Mock EWC instantiation
         self.mock_ewc = MagicMock(spec=EWC)
         self.mock_ewc.apply_ewc_penalty_to_gradients = MagicMock()
-        with unittest.mock.patch('spacy_ewc.EWC', return_value=self.mock_ewc):
+        with unittest.mock.patch("spacy_ewc.EWC", return_value=self.mock_ewc):
             self.lambda_value = 1000.0
             self.pipe_with_ewc = create_ewc_pipe(
                 pipe=self.mock_pipe,
                 data=self.mock_data,
-                lambda_=self.lambda_value
+                lambda_=self.lambda_value,
             )
 
     def test_create_ewc_pipe_with_trainable_pipe(self):
         # Check that the function returns a TrainablePipe
         self.assertIsInstance(self.pipe_with_ewc, TrainablePipe)
 
-        # Check that the model in TrainablePipe was wrapped with EWCModelWrapper
+        # Check that the model in TrainablePipe was wrapped with
+        # EWCModelWrapper
         self.assertIsInstance(self.pipe_with_ewc.model, EWCModelWrapper)
 
     def test_create_ewc_pipe_with_language_model(self):
@@ -129,11 +131,9 @@ class TestCreateEwcPipe(unittest.TestCase):
 
         mock_language.get_pipe.return_value = self.mock_pipe
 
-        with unittest.mock.patch('spacy_ewc.EWC', return_value=self.mock_ewc):
+        with unittest.mock.patch("spacy_ewc.EWC", return_value=self.mock_ewc):
             pipe_with_ewc = create_ewc_pipe(
-                pipe=mock_language,
-                data=self.mock_data,
-                pipe_name="other"
+                pipe=mock_language, data=self.mock_data, pipe_name="other"
             )
 
         # Ensure the Language model's component was retrieved and wrapped
@@ -144,8 +144,10 @@ class TestCreateEwcPipe(unittest.TestCase):
         # Test passing an invalid type to `pipe`
         with self.assertRaises(ValueError) as context:
             create_ewc_pipe(pipe=Mock(), data=self.mock_data)
-        self.assertIn("pipe param can only be an instance of one of: ['Language', 'TrainablePipe']", str(
-            context.exception))
+        self.assertIn(
+            "pipe param can only be an instance of one of: ['Language', 'TrainablePipe']",
+            str(context.exception),
+        )
 
     def test_create_ewc_pipe_default_component_name(self):
         # Mock a Language object with a default component (ner)
@@ -153,11 +155,8 @@ class TestCreateEwcPipe(unittest.TestCase):
 
         mock_language.get_pipe.return_value = self.mock_pipe
 
-        with unittest.mock.patch('spacy_ewc.EWC', return_value=self.mock_ewc):
-            pipe_with_ewc = create_ewc_pipe(
-                pipe=mock_language,
-                data=self.mock_data
-            )
+        with unittest.mock.patch("spacy_ewc.EWC", return_value=self.mock_ewc):
+            pipe_with_ewc = create_ewc_pipe(pipe=mock_language, data=self.mock_data)
 
         # Ensure default component name 'ner' is used if pipe_name is None
         mock_language.get_pipe.assert_called_once_with("ner")
@@ -165,11 +164,10 @@ class TestCreateEwcPipe(unittest.TestCase):
 
     def test_create_ewc_pipe_ewc_initialization(self):
         # Ensure EWC is initialized with correct parameters in create_ewc_pipe
-        with unittest.mock.patch('spacy_ewc.EWC', return_value=self.mock_ewc) as mock_ewc_class:
-            create_ewc_pipe(pipe=self.mock_pipe,
-                            data=self.mock_data, lambda_=500.0)
+        with unittest.mock.patch("spacy_ewc.EWC", return_value=self.mock_ewc):
+            create_ewc_pipe(pipe=self.mock_pipe, data=self.mock_data, lambda_=500.0)
             self.assertIsInstance(self.mock_pipe.model, EWCModelWrapper)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
