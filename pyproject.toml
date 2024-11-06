@@ -8,23 +8,26 @@ version = "0.1.0"
 description = "A spaCy library for Named Entity Recognition with Elastic Weight Consolidation."
 license = { text = "MIT" }
 authors = [{ name = "DarkRockMountain", email = "dev@darkrockmountain.com" }]
-dependencies = ["spacy>=3.2.1", "numpy>=1.20.0"]
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = ["spacy>=3.8.2", "numpy>=2.0.2"]
 
-
+# Optional dependencies
 [project.optional-dependencies]
 dev = [
     "pytest",
     "coverage",
     "black",
     "spacy-lookups-data",
-    "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.2.0/en_core_web_sm-3.2.0.tar.gz",
+    "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz",
 ]
 docs = ["sphinx"]
 
-
+# URLs related to the project
 [project.urls]
-"Homepage" = "https://github.com/darkrockmountain/spacy-ewc"
-
+homepage = "https://github.com/darkrockmountain/spacy-ewc"
+repository = "https://github.com/darkrockmountain/spacy-ewc"
+documentation = "https://github.com/darkrockmountain/spacy-ewc#readme"
 
 [tool.setuptools.packages.find]
 where = ["src"]
