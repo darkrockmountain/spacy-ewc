@@ -1,0 +1,31 @@
+name: Documentation
+
+on: workflow_dispatch
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies for docs
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[doc]"
+
+      - name: Build Sphinx documentation
+        run: sphinx-build -b html docs/ docs/_build/
+
+      # Optional: Deploy to GitHub Pages
+      # - name: Deploy to GitHub Pages
+      #   uses: peaceiris/actions-gh-pages@<latest_commit_sha_for_gh_pages>
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     publish_dir: docs/_build
