@@ -4,9 +4,10 @@ from spacy.language import Language
 from spacy.pipeline import TrainablePipe
 from thinc.api import get_current_ops
 import spacy.util as spacy_utils
-from typing import List, Tuple, Dict, Optional, Any, cast, Union, get_args, Callable
-from spacy_ewc.vector_dict import VectorDict
+from typing import List, Optional, cast, Union, get_args
 import logging
+from .vector_dict import VectorDict
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class EWC:
         data: List[Example],
         *,
         lambda_: float = 1000.0,
-        pipe_name: Optional[str] = None
+        pipe_name: Optional[str] = None,
     ):
         """
         Initialize the EWC instance by capturing the model's parameters after training on the first task,
@@ -95,14 +96,14 @@ class EWC:
         if not self.theta_star:
             raise ValueError("Initial model parameters are not set.")
 
-        # Compute the Fisher Information Matrix based on the provided training data
+        # Compute the Fisher Information Matrix based on the provided training
+        # data
         self.fisher_matrix: VectorDict = self._compute_fisher_matrix(data)
         logger.debug("Computed Fisher Information Matrix.")
 
         # Ensure the Fisher Information Matrix is computed
         if not self.fisher_matrix:
             raise ValueError("Fisher Information Matrix has not been computed.")
-
 
     def _validate_initialization(self, function_name: str = None):
         """
@@ -119,11 +120,23 @@ class EWC:
         with penalty calculations or gradient updates.
         """
         if not self.fisher_matrix:
-            raise ValueError("Fisher Information Matrix has not been computed." +
-                             (f" Ensure `self.fisher_matrix` has been initialized with start gradients before calling `{function_name}()`." if function_name else ""))
+            raise ValueError(
+                "Fisher Information Matrix has not been computed."
+                + (
+                    f" Ensure `self.fisher_matrix` has been initialized with start gradients before calling `{function_name}()`."
+                    if function_name
+                    else ""
+                )
+            )
         if not self.theta_star:
-            raise ValueError("Initial model parameters are not set." +
-                             (f" Ensure `self.theta_star` has been initialized with start parameters before calling `{function_name}()`." if function_name else ""))
+            raise ValueError(
+                "Initial model parameters are not set."
+                + (
+                    f" Ensure `self.theta_star` has been initialized with start parameters before calling `{function_name}()`."
+                    if function_name
+                    else ""
+                )
+            )
 
     def set_lambda(self, new_lambda: float):
         """
@@ -134,7 +147,6 @@ class EWC:
         """
         logger.info(f"Updating lambda_ from {self.lambda_} to {new_lambda}.")
         self.lambda_ = new_lambda
-
 
     # ===== Parameter Management =====
 
@@ -158,17 +170,19 @@ class EWC:
         ner_model: Model = self.pipe.model
         for layer in ner_model.layers:
             for name in layer.param_names:
-                # Conditionally copy or keep reference based on the 'copy' parameter
+                # Conditionally copy or keep reference based on the 'copy'
+                # parameter
                 try:
                     if copy:
-                        current_params[f"{layer.name}_{
-                            name}"] = layer.get_param(name).copy()
+                        current_params[f"{layer.name}_{name}"] = layer.get_param(
+                            name
+                        ).copy()
                     else:
-                        current_params[f"{layer.name}_{
-                            name}"] = layer.get_param(name)
+                        current_params[f"{layer.name}_{name}"] = layer.get_param(name)
                 except Exception as e:
-                    logger.warning(f"Failed to retrieve parameter '{
-                                   name}' for copying: {str(e)}")
+                    logger.warning(
+                        f"Failed to retrieve parameter '{name}' for copying: {str(e)}"
+                    )
         return current_params
 
     # ===== Fisher Information Matrix Calculation =====
@@ -189,10 +203,10 @@ class EWC:
         Mathematical Formulation:
         - For each parameter θ_i, compute:
           F_i = E_x[(∂L(x; θ)/∂θ_i)^2]
-  
+
         - Where E_x denotes the expectation over the data samples x.
 
-        
+
 
         Implementation Details:
         - The method performs forward and backward passes over the training data to accumulate gradients.
@@ -213,8 +227,7 @@ class EWC:
 
         # Set up data batching
         batches = spacy_utils.minibatch(
-            examples,
-            size=spacy_utils.compounding(4.0, 32.0, 1.001)
+            examples, size=spacy_utils.compounding(4.0, 32.0, 1.001)
         )
 
         # Initialize an empty Fisher Information Matrix
@@ -229,7 +242,7 @@ class EWC:
             self.pipe.update(batch, losses=losses, sgd=None)
 
             # If no NER loss is computed, skip this batch
-            if 'ner' not in losses or losses['ner'] <= 0:
+            if "ner" not in losses or losses["ner"] <= 0:
                 logger.warning("Skipping batch with no or zero loss.")
                 continue
 
@@ -238,7 +251,8 @@ class EWC:
                 for (_, name), (_, grad) in layer.get_gradients().items():
                     if name not in layer.param_names:
                         continue
-                    # Square the gradient and add to the Fisher Information Matrix
+                    # Square the gradient and add to the Fisher Information
+                    # Matrix
                     grad = ops.asarray(grad).copy() ** 2
                     key = f"{layer.name}_{name}"
                     try:
@@ -254,14 +268,13 @@ class EWC:
 
         if num_batches == 0:
             raise ValueError(
-                "No batches yielded positive loss; Fisher Information Matrix not computed.")
+                "No batches yielded positive loss; Fisher Information Matrix not computed."
+            )
 
         # Average the matrix over the batches
         for name in fisher_matrix:
             fisher_matrix[name] /= num_batches
-            logger.debug(f"Fisher Matrix value for {
-                         name}: {fisher_matrix[name]}")
-
+            logger.debug(f"Fisher Matrix value for {name}: {fisher_matrix[name]}")
         return fisher_matrix
 
     # ===== Penalty Computations =====
@@ -308,8 +321,7 @@ class EWC:
                 # Compute F_i * (θ_i - θ_i^*)^2
                 penalty_contrib = (fisher_param * param_diff_squared).sum()
                 ewc_penalty += penalty_contrib
-                logger.debug(f"Penalty contribution for {
-                             key}: {penalty_contrib}")
+                logger.debug(f"Penalty contribution for {key}: {penalty_contrib}")
 
         # Multiply by 0.5 as per the formula
         ewc_penalty *= 0.5
@@ -355,7 +367,6 @@ class EWC:
         return ewc_penalty_gradients
 
     # ===== Gradient Application =====
-
     def apply_ewc_penalty_to_gradients(self):
         """
         Apply the EWC penalty directly to the model's gradients during training.
@@ -364,12 +375,12 @@ class EWC:
 
         Mathematical Formulation:
         - For each parameter θ_i, update the gradient g_i as:
-          g_i ← g_i + λ * F_i * (θ_i - θ_i^*)
+            g_i ← g_i + λ * F_i * (θ_i - θ_i^*)
         - Where:
-          - g_i: Original gradient of parameter θ_i.
-          - λ: Regularization strength (lambda_).
-          - F_i: Fisher Information for parameter θ_i.
-          - θ_i^*: Parameter value after training on the first task.
+            - g_i: Original gradient of parameter θ_i.
+            - λ: Regularization strength (lambda_).
+            - F_i: Fisher Information for parameter θ_i.
+            - θ_i^*: Parameter value after training on the first task.
 
         Reference:
         - The application of the EWC gradient penalty during optimization as per Kirkpatrick et al., 2017.
@@ -378,6 +389,7 @@ class EWC:
         - ValueError: If the Fisher Information Matrix or initial parameters are not initialized.
         - ValueError: If there are mismatches in parameter shapes or data types.
         """
+
         self._validate_initialization("apply_ewc_penalty_to_gradients")
         logger.info(f"Applying EWC penalty to gradients with lambda={self.lambda_}.")
 
@@ -391,25 +403,37 @@ class EWC:
                 key_name = f"{layer.name}_{name}"
 
                 # Ensure key presence and shape compatibility
-                if key_name not in current_params or key_name not in self.theta_star or key_name not in self.fisher_matrix:
+                if (
+                    key_name not in current_params
+                    or key_name not in self.theta_star
+                    or key_name not in self.fisher_matrix
+                ):
                     raise ValueError(f"Invalid key_name found '{key_name}'.")
 
                 theta_current = current_params[key_name]
                 theta_star_param = self.theta_star[key_name]
                 fisher_param = self.fisher_matrix[key_name]
 
-                if theta_current.shape != theta_star_param.shape or theta_current.shape != fisher_param.shape or theta_current.shape != grad.shape:
+                if (
+                    theta_current.shape != theta_star_param.shape
+                    or theta_current.shape != fisher_param.shape
+                    or theta_current.shape != grad.shape
+                ):
                     logger.info(f"Shape mismatch for {key_name}, skipping.")
                     continue
 
-                if theta_current.dtype != theta_star_param.dtype or theta_current.dtype != fisher_param.dtype or theta_current.dtype != grad.dtype:
+                if (
+                    theta_current.dtype != theta_star_param.dtype
+                    or theta_current.dtype != fisher_param.dtype
+                    or theta_current.dtype != grad.dtype
+                ):
                     logger.info(f"Dtype mismatch for {key_name}, skipping.")
                     continue
 
                 # Calculate and apply the EWC penalty to the gradient
                 # Update gradient: g_i ← g_i + λ * F_i * (θ_i - θ_i^*)
                 ewc_penalty = fisher_param * (theta_current - theta_star_param)
-                grad += (self.lambda_ * ewc_penalty)
+                grad += self.lambda_ * ewc_penalty
                 logger.debug(f"Applied penalty for {key_name}: {ewc_penalty}")
 
     # ===== Loss Calculation =====

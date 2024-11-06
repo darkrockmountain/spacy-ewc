@@ -16,9 +16,10 @@ dependencies = ["spacy>=3.8.2", "numpy>=2.0.2"]
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "coverage",
-    "black",
+    "pytest-cov",
     "spacy-lookups-data",
+    "flake8",
+    "black",
     "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz",
 ]
 docs = ["sphinx"]
@@ -29,5 +30,6 @@ homepage = "https://github.com/darkrockmountain/spacy-ewc"
 repository = "https://github.com/darkrockmountain/spacy-ewc"
 documentation = "https://github.com/darkrockmountain/spacy-ewc#readme"
 
+# Specify the package directory explicitly to avoid the "multiple top-level packages" error
 [tool.setuptools.packages.find]
-where = ["src"]
+include = ["spacy_ewc*"]
