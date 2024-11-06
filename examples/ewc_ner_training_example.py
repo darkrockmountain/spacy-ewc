@@ -28,118 +28,6 @@ def run_ewc_example():
     # Get the NER component from the pipeline or add it if not present
     ner = nlp.get_pipe("ner") if nlp.has_pipe("ner") else nlp.add_pipe("ner")
 
-    # Define the original annotated data extracted from `data_examples/original_spacy_labels.py`.
-    # This data includes sentences labeled with entities that the spaCy model should recognize
-    # (e.g., PERSON, ORG, DATE). It is used to initialize parameters for the Elastic Weight
-    # Consolidation (EWC) example, including setting up the Fisher Information
-    # Matrix.
-
-    original_spacy_labels = [
-        # Each sentence contains labeled entities in the format (start, end, label).
-        # This setup will allow the EWC method to recognize and retain knowledge of these entities
-        # even as new information is introduced.
-        (
-            "John bought a new car yesterday.",
-            {"entities": [(0, 4, "PERSON"), (22, 31, "DATE")]},
-        ),
-        (
-            "Microsoft announced its new software in San Francisco.",
-            {"entities": [(0, 9, "ORG"), (40, 53, "GPE")]},
-        ),
-        (
-            "The meeting is scheduled for 3 p.m. on Friday.",
-            {"entities": [(29, 35, "TIME"), (39, 45, "DATE")]},
-        ),
-        (
-            "Sarah earned $500 in tips last week.",
-            {
-                "entities": [
-                    (0, 5, "PERSON"),
-                    (14, 17, "MONEY"),
-                    (26, 35, "DATE"),
-                ]
-            },
-        ),
-        (
-            "Amazon plans to open a new warehouse in Seattle.",
-            {"entities": [(0, 6, "ORG"), (40, 47, "GPE")]},
-        ),
-        (
-            "On June 15th, the festival will take place in Central Park.",
-            {"entities": [(3, 12, "DATE"), (46, 58, "LOC")]},
-        ),
-        (
-            "Alice went to the dentist at 10:30 a.m. today.",
-            {
-                "entities": [
-                    (0, 5, "PERSON"),
-                    (29, 39, "TIME"),
-                    (40, 45, "DATE"),
-                ]
-            },
-        ),
-        (
-            "The company raised $2 million in funding.",
-            {"entities": [(19, 29, "MONEY")]},
-        ),
-        (
-            "Tom visited Paris in July.",
-            {
-                "entities": [
-                    (0, 3, "PERSON"),
-                    (12, 17, "GPE"),
-                    (21, 25, "DATE"),
-                ]
-            },
-        ),
-        (
-            "Carlos bought a ticket to the concert for $75.",
-            {"entities": [(0, 6, "PERSON"), (43, 45, "MONEY")]},
-        ),
-        (
-            "Lucy paid $45 for her meal at the Italian restaurant.",
-            {
-                "entities": [
-                    (0, 4, "PERSON"),
-                    (11, 13, "MONEY"),
-                    (34, 41, "NORP"),
-                ]
-            },
-        ),
-        (
-            "Ryan's flight landed at 6:00 a.m. today.",
-            {
-                "entities": [
-                    (0, 4, "PERSON"),
-                    (24, 33, "TIME"),
-                    (34, 39, "DATE"),
-                ]
-            },
-        ),
-        # Additional example:
-        # In the following example, SpaceX is included as it might not be correctly tokenized or classified.
-        # Normally, one would use a Matcher in spaCy to define SpaceX as an ORG, but here, we let the model
-        # interpret it based on its default en_core_web_sm configuration. For this example, we retain the
-        # original labels provided by spaCy's model (classifying SpaceX as PERSON) to ensure consistency
-        # with the initial setup of EWC.
-        # Note: In a real application, you would train the model to recognize SpaceX as an ORG or
-        # use a Matcher for better accuracy. See https://spacy.io/api/matcher for more details.
-        (
-            "In September 2023, SpaceX launched the Starship rocket from its Texas base, hoping to send the first humans to Mars by 2026.",
-            {
-                "entities": [
-                    (3, 17, "DATE"),
-                    (19, 25, "ORG"),
-                    (39, 47, "PRODUCT"),
-                    (64, 69, "GPE"),
-                    (95, 100, "ORDINAL"),
-                    (111, 115, "LOC"),
-                    (119, 123, "DATE"),
-                ]
-            },
-        ),
-        # Add more annotated examples as needed to expand the EWC training dataset.
-    ]
     for epoch in range(2):
         nlp.update(
             [
@@ -148,8 +36,17 @@ def run_ewc_example():
             ]
         )
 
-    # Initialize the EWC Pipe Wrapper with the NER pipe and original labeled
-    # examples
+    # Initialize the EWC wrapper for the NER component with the original labeled examples.
+    # This step enables the model to retain knowledge of previous tasks by preserving parameters
+    # critical to the original labels, which helps prevent catastrophic forgetting.
+    #
+    # The `create_ewc_pipe` function achieves this by:
+    # - Capturing a snapshot of the model's current parameters, serving as a baseline.
+    # - Calculating the Fisher Information Matrix (FIM) to identify important parameters.
+    # - Setting up an EWC penalty that discourages changes to these parameters during future training.
+    #
+    # By applying EWC, the model can learn new entity labels (like "BUDDY" and "COMPANY") while
+    # retaining performance on existing labels (such as "PERSON" or "ORG").
     create_ewc_pipe(
         ner,
         [
@@ -157,70 +54,6 @@ def run_ewc_example():
             for text, annotations in original_spacy_labels
         ],
     )
-
-    # Define new training data extracted from `data_examples/training_data.py`
-    # This data includes custom labels to train the model further with EWC
-    training_data = [
-        ("John Doe is a person.", {"entities": [(0, 8, "BUDDY")]}),
-        ("OpenAI is a company.", {"entities": [(0, 6, "COMPANY")]}),
-        (
-            "Jane Smith works at Microsoft.",
-            {"entities": [(0, 10, "BUDDY"), (20, 29, "COMPANY")]},
-        ),
-        (
-            "GMaps was developed at Google.",
-            {"entities": [(23, 29, "COMPANY")]},
-        ),
-        (
-            "John Doe works at OpenAI.",
-            {"entities": [(0, 8, "BUDDY"), (18, 24, "COMPANY")]},
-        ),
-        (
-            "John Doe and Jane Smith are colleagues at OpenAI.",
-            {
-                "entities": [
-                    (0, 8, "BUDDY"),
-                    (13, 23, "BUDDY"),
-                    (42, 48, "COMPANY"),
-                ]
-            },
-        ),
-        (
-            "OpenAI hired John Doe.",
-            {"entities": [(0, 6, "COMPANY"), (13, 21, "BUDDY")]},
-        ),
-        (
-            "Alice Johnson joined Amazon last year.",
-            {"entities": [(0, 13, "BUDDY"), (21, 27, "COMPANY")]},
-        ),
-        (
-            "Bob Lee and Carol King work for Facebook.",
-            {
-                "entities": [
-                    (0, 7, "BUDDY"),
-                    (12, 22, "BUDDY"),
-                    (32, 40, "COMPANY"),
-                ]
-            },
-        ),
-        (
-            "Diana Prince was promoted at DC Comics.",
-            {"entities": [(0, 12, "BUDDY"), (29, 38, "COMPANY")]},
-        ),
-        (
-            "Evan Wright is the CEO of Tesla.",
-            {"entities": [(0, 11, "BUDDY"), (26, 31, "COMPANY")]},
-        ),
-        (
-            "Frank Miller collaborates with Pixar Studios.",
-            {"entities": [(0, 12, "BUDDY"), (31, 44, "COMPANY")]},
-        ),
-        (
-            "Steve Jobs founded Apple.",
-            {"entities": [(0, 10, "BUDDY"), (19, 24, "COMPANY")]},
-        ),
-        # Add more variations as needed
-    ]
 
     # Extract custom labels from the training data and add them to the NER pipeline
     # Our custom labels in this dataset are "BUDDY" and "COMPANY"
@@ -288,6 +121,185 @@ def run_ewc_example():
     print("\nEntities in test sentence:")
     for ent in doc.ents:
         print(f"{ent.text}: {ent.label_}")
+
+
+# Define the original annotated data extracted from `data_examples/original_spacy_labels.py`.
+# This data includes sentences labeled with entities that the spaCy model should recognize
+# (e.g., PERSON, ORG, DATE). It is used to initialize parameters for the Elastic Weight
+# Consolidation (EWC) example, including setting up the Fisher Information
+# Matrix.
+
+original_spacy_labels = [
+    # Each sentence contains labeled entities in the format (start, end, label).
+    # This setup will allow the EWC method to recognize and retain knowledge of these entities
+    # even as new information is introduced.
+    (
+        "John bought a new car yesterday.",
+        {"entities": [(0, 4, "PERSON"), (22, 31, "DATE")]},
+    ),
+    (
+        "Microsoft announced its new software in San Francisco.",
+        {"entities": [(0, 9, "ORG"), (40, 53, "GPE")]},
+    ),
+    (
+        "The meeting is scheduled for 3 p.m. on Friday.",
+        {"entities": [(29, 35, "TIME"), (39, 45, "DATE")]},
+    ),
+    (
+        "Sarah earned $500 in tips last week.",
+        {
+            "entities": [
+                (0, 5, "PERSON"),
+                (14, 17, "MONEY"),
+                (26, 35, "DATE"),
+            ]
+        },
+    ),
+    (
+        "Amazon plans to open a new warehouse in Seattle.",
+        {"entities": [(0, 6, "ORG"), (40, 47, "GPE")]},
+    ),
+    (
+        "On June 15th, the festival will take place in Central Park.",
+        {"entities": [(3, 12, "DATE"), (46, 58, "LOC")]},
+    ),
+    (
+        "Alice went to the dentist at 10:30 a.m. today.",
+        {
+            "entities": [
+                (0, 5, "PERSON"),
+                (29, 39, "TIME"),
+                (40, 45, "DATE"),
+            ]
+        },
+    ),
+    (
+        "The company raised $2 million in funding.",
+        {"entities": [(19, 29, "MONEY")]},
+    ),
+    (
+        "Tom visited Paris in July.",
+        {
+            "entities": [
+                (0, 3, "PERSON"),
+                (12, 17, "GPE"),
+                (21, 25, "DATE"),
+            ]
+        },
+    ),
+    (
+        "Carlos bought a ticket to the concert for $75.",
+        {"entities": [(0, 6, "PERSON"), (43, 45, "MONEY")]},
+    ),
+    (
+        "Lucy paid $45 for her meal at the Italian restaurant.",
+        {
+            "entities": [
+                (0, 4, "PERSON"),
+                (11, 13, "MONEY"),
+                (34, 41, "NORP"),
+            ]
+        },
+    ),
+    (
+        "Ryan's flight landed at 6:00 a.m. today.",
+        {
+            "entities": [
+                (0, 4, "PERSON"),
+                (24, 33, "TIME"),
+                (34, 39, "DATE"),
+            ]
+        },
+    ),
+    # Additional example:
+    # In the following example, SpaceX is included as it might not be correctly tokenized or classified.
+    # Normally, one would use a Matcher in spaCy to define SpaceX as an ORG, but here, we let the model
+    # interpret it based on its default en_core_web_sm configuration. For this example, we retain the
+    # original labels provided by spaCy's model (classifying SpaceX as PERSON) to ensure consistency
+    # with the initial setup of EWC.
+    # Note: In a real application, you would train the model to recognize SpaceX as an ORG or
+    # use a Matcher for better accuracy. See https://spacy.io/api/matcher for more details.
+    (
+        "In September 2023, SpaceX launched the Starship rocket from its Texas base, hoping to send the first humans to Mars by 2026.",
+        {
+            "entities": [
+                (3, 17, "DATE"),
+                (19, 25, "ORG"),
+                (39, 47, "PRODUCT"),
+                (64, 69, "GPE"),
+                (95, 100, "ORDINAL"),
+                (111, 115, "LOC"),
+                (119, 123, "DATE"),
+            ]
+        },
+    ),
+    # Add more annotated examples as needed to expand the EWC training dataset.
+]
+
+
+# Define new training data extracted from `data_examples/training_data.py`
+# This data includes custom labels to train the model further with EWC
+training_data = [
+    ("John Doe is a person.", {"entities": [(0, 8, "BUDDY")]}),
+    ("OpenAI is a company.", {"entities": [(0, 6, "COMPANY")]}),
+    (
+        "Jane Smith works at Microsoft.",
+        {"entities": [(0, 10, "BUDDY"), (20, 29, "COMPANY")]},
+    ),
+    (
+        "GMaps was developed at Google.",
+        {"entities": [(23, 29, "COMPANY")]},
+    ),
+    (
+        "John Doe works at OpenAI.",
+        {"entities": [(0, 8, "BUDDY"), (18, 24, "COMPANY")]},
+    ),
+    (
+        "John Doe and Jane Smith are colleagues at OpenAI.",
+        {
+            "entities": [
+                (0, 8, "BUDDY"),
+                (13, 23, "BUDDY"),
+                (42, 48, "COMPANY"),
+            ]
+        },
+    ),
+    (
+        "OpenAI hired John Doe.",
+        {"entities": [(0, 6, "COMPANY"), (13, 21, "BUDDY")]},
+    ),
+    (
+        "Alice Johnson joined Amazon last year.",
+        {"entities": [(0, 13, "BUDDY"), (21, 27, "COMPANY")]},
+    ),
+    (
+        "Bob Lee and Carol King work for Facebook.",
+        {
+            "entities": [
+                (0, 7, "BUDDY"),
+                (12, 22, "BUDDY"),
+                (32, 40, "COMPANY"),
+            ]
+        },
+    ),
+    (
+        "Diana Prince was promoted at DC Comics.",
+        {"entities": [(0, 12, "BUDDY"), (29, 38, "COMPANY")]},
+    ),
+    (
+        "Evan Wright is the CEO of Tesla.",
+        {"entities": [(0, 11, "BUDDY"), (26, 31, "COMPANY")]},
+    ),
+    (
+        "Frank Miller collaborates with Pixar Studios.",
+        {"entities": [(0, 12, "BUDDY"), (31, 44, "COMPANY")]},
+    ),
+    (
+        "Steve Jobs founded Apple.",
+        {"entities": [(0, 10, "BUDDY"), (19, 24, "COMPANY")]},
+    ),
+    # Add more variations as needed
+]
 
 
 if __name__ == "__main__":
