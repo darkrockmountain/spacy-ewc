@@ -79,7 +79,7 @@ In sequential or continual learning, neural networks often suffer from **catastr
      pip install .[dev]
      ```
 
-4. **Download the spaCy English model**:
+4. **Download the spaCy English model (Optional)**:
 
    Since `en_core_web_sm` is listed as a development dependency, it will be installed if you used `pip install .[dev]`. Otherwise, install it manually:
 
@@ -116,11 +116,12 @@ The script performs the following steps:
 Example output:
 
 ```console
-Training loss: 8.49725
+Training loss: 3.1743565
 
 Entities in test sentence:
 Elon Musk: BUDDY
 SpaceX: COMPANY
+2002: DATE
 approximately $100 million: MONEY
 El Segundo: GPE
 California: GPE
