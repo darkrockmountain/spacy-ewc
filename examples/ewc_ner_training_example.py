@@ -1,8 +1,8 @@
 import spacy
 from spacy.training import Example
-from spacy_wrapper.ewc_spacy_wrapper import create_ewc_pipe
 from thinc.optimizers import Optimizer
-from utils.extract_labels import extract_labels
+from spacy_ewc import create_ewc_pipe
+from spacy_ewc.utils.extract_labels import extract_labels
 
 
 def run_ewc_example():
