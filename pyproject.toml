@@ -10,7 +10,7 @@ license = { text = "MIT" }
 authors = [{ name = "DarkRockMountain", email = "dev@darkrockmountain.com" }]
 readme = "README.md"
 requires-python = ">=3.7"
-dependencies = ["spacy>=3.8.2", "numpy>=2.0.2"]
+dependencies = ["spacy>=3.0.0", "numpy>=2.0.2"]
 
 # Optional dependencies
 [project.optional-dependencies]
