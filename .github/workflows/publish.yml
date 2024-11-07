@@ -1,0 +1,49 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published, prereleased]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/spacy-ewc/
+    permissions:
+      contents: read
+      id-token: write # Required for OIDC authentication
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+
+      # Install build and upload dependencies
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine setuptools-scm
+
+      # Build the package
+      - name: Build the package
+        run: python -m build
+
+      # Publish to TestPyPI for prereleases only
+      - name: Publish to TestPyPI
+        if: github.event.release.prerelease == true
+        uses: pypa/gh-action-pypi-publish@15c56dba361d8335944d31a2ecd17d700fc7bcbc # v1.12.2
+        with:
+          packages-dir: dist
+          repository-url: https://test.pypi.org/legacy/
+
+      # Publish to PyPI for official releases only
+      - name: Publish to PyPI
+        if: github.event.release.prerelease == false
+        uses: pypa/gh-action-pypi-publish@15c56dba361d8335944d31a2ecd17d700fc7bcbc # v1.12.2
+        with:
+          packages-dir: dist

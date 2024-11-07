@@ -1,0 +1,7 @@
+{
+  "action": "published",
+  "release": {
+    "tag_name": "v0.1.2",
+    "prerelease": false
+  }
+}

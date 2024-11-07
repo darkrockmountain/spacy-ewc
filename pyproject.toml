@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools", "setuptools-scm", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "spacy-ewc"
-version = "0.1.0"
+dynamic = ["version"]                                                                           # The version is dynamically fetched by setuptools-scm
 description = "A spaCy library for Named Entity Recognition with Elastic Weight Consolidation."
 license = { text = "MIT" }
 authors = [{ name = "DarkRockMountain", email = "dev@darkrockmountain.com" }]
@@ -33,3 +33,8 @@ documentation = "https://github.com/darkrockmountain/spacy-ewc#readme"
 # Specify the package directory explicitly to avoid the "multiple top-level packages" error
 [tool.setuptools.packages.find]
 include = ["spacy_ewc*"]
+
+# Specify specifies options for setuptools-scm
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "no-local-version"
