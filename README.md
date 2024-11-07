@@ -4,12 +4,12 @@
 [![License](https://img.shields.io/github/license/darkrockmountain/spacy-ewc)](LICENSE)
 [![Build Status](https://github.com/darkrockmountain/spacy-ewc/actions/workflows/test-lint.yml/badge.svg?kill_cache=1)](https://github.com/darkrockmountain/spacy-ewc/actions/workflows/test-lint.yml)
 [![codecov](https://codecov.io/gh/darkrockmountain/spacy-ewc/graph/badge.svg?token=8CXXQN183Y)](https://codecov.io/gh/darkrockmountain/spacy-ewc)
-[![GitHub last commit](https://img.shields.io/github/last-commit/darkrockmountain/spacy-ewc?kill_cache=1)](https://github.com/darkrockmountain/spacy-ewc/commits/main)
+[![GitHub last commit](https://img.shields.io/github/last-commit/darkrockmountain/spacy-ewc?kill_cache)](https://github.com/darkrockmountain/spacy-ewc/commits/main)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc?ref=badge_shield&issueType=license)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc?ref=badge_shield&issueType=security)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/darkrockmountain/spacy-ewc/badge)](https://scorecard.dev/viewer/?uri=github.com/darkrockmountain/spacy-ewc)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/darkrockmountain/spacy-ewc?kill_cache=1)](https://github.com/darkrockmountain/spacy-ewc/releases)
-[![PyPi Version](https://img.shields.io/pypi/v/spacy-ewc.svg)](https://pypi.python.org/pypi/spacy-ewc/)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/darkrockmountain/spacy-ewc?kill_cache)](https://github.com/darkrockmountain/spacy-ewc/releases)
+[![PyPi Version](https://img.shields.io/pypi/v/spacy-ewc.svg?kill_cache)](https://pypi.python.org/pypi/spacy-ewc/)
 
 ## Overview
 
@@ -87,17 +87,17 @@ In sequential or continual learning, neural networks often suffer from **catastr
 
    - **Development dependencies** (recommended for contributors):
 
-      ```bash
-      pip install .[dev]
-      ```
-      
-      After installing the development dependencies, you’ll also need to manually install the spaCy language model used in tests:
+     ```bash
+     pip install .[dev]
+     ```
 
-      ```bash
-      python -m spacy download en_core_web_sm
-      ```
+     After installing the development dependencies, you’ll also need to manually install the spaCy language model used in tests:
 
-      _This ensures that all dependencies and the necessary language model are available for development and testing._
+     ```bash
+     python -m spacy download en_core_web_sm
+     ```
+
+     _This ensures that all dependencies and the necessary language model are available for development and testing._
 
 4. **Download the spaCy English model (Optional)**:
 
@@ -162,7 +162,9 @@ El Segundo: GPE
 California: GPE
 ```
 
-### Integrating the `EWC` Class for NER Training with `create_ewc_pipe`
+### Using the EWC Class in Your Own Code
+
+#### Integrating the `EWC` Class for NER Training with `create_ewc_pipe`
 
 You can integrate the `EWC` class into your spaCy training scripts to enhance NER training with Elastic Weight Consolidation (EWC). Below is a sample setup:
 
