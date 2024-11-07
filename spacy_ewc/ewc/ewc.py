@@ -8,16 +8,20 @@ from typing import List, Optional, cast, Union, get_args
 import logging
 from .vector_dict import VectorDict
 
-
 logger = logging.getLogger(__name__)
 
 
 class EWC:
     """
     The EWC (Elastic Weight Consolidation) class implements the EWC algorithm to prevent catastrophic forgetting
-    in neural networks during sequential learning tasks. It captures the model's parameters after training on the first task,
-    computes the Fisher Information Matrix to estimate the importance of each parameter, and applies a penalty to the loss function
-    during subsequent training to retain important parameters.
+    in neural networks during sequential learning tasks. It captures the model's parameters after training on the
+    first task, computes the Fisher Information Matrix (FIM) to estimate the importance of each parameter, and
+    applies a penalty to the loss function during subsequent training to retain important parameters.
+
+    Note:
+    - The data from the first task is necessary during initialization to compute the Fisher Information Matrix (FIM),
+      which estimates parameter importance based on their influence on the loss function over the data.
+      Initial parameters alone are insufficient because they do not contain gradient information necessary for computing the FIM.
 
     References:
     - Kirkpatrick, J., Pascanu, R., Rabinowitz, N. C., Veness, J., Desjardins, G., Rusu, A. A., ... & Hadsell, R. (2017).
@@ -43,6 +47,9 @@ class EWC:
         Parameters:
         - pipe (Union[Language, TrainablePipe]): The spaCy Language model or a TrainablePipe component.
         - data (List[Example]): The list of training examples used to compute the Fisher Information Matrix.
+          Note: This data is essential because it allows the computation of the FIM, which estimates parameter importance
+          based on their influence on the loss function over the data. Initial parameters alone are insufficient
+          because they do not contain gradient information necessary for computing the FIM.
         - lambda_ (float): The regularization strength that scales the EWC penalty (default is 1000.0).
         - pipe_name (Optional[str]): The name of the pipe component if `pipe` is a Language model (default is 'ner').
 
@@ -61,6 +68,9 @@ class EWC:
         Reference:
         - The Fisher Information Matrix is computed as the expected value of the squared gradients of the loss function
           with respect to the model parameters, evaluated on the data from the first task.
+          It is computed as:
+            F_i = E_x [ (∂L(x; θ)/∂θ_i)^2 ]
+            where L(x; θ) is the loss function and x represents the data samples.
 
         Raises:
         - ValueError: If the pipe is not an instance of Language or TrainablePipe.
@@ -96,8 +106,7 @@ class EWC:
         if not self.theta_star:
             raise ValueError("Initial model parameters are not set.")
 
-        # Compute the Fisher Information Matrix based on the provided training
-        # data
+        # Compute the Fisher Information Matrix based on the provided training data
         self.fisher_matrix: VectorDict = self._compute_fisher_matrix(data)
         logger.debug("Computed Fisher Information Matrix.")
 
@@ -123,7 +132,7 @@ class EWC:
             raise ValueError(
                 "Fisher Information Matrix has not been computed."
                 + (
-                    f" Ensure `self.fisher_matrix` has been initialized with start gradients before calling `{function_name}()`."
+                    f" Ensure `self.fisher_matrix` has been initialized before calling `{function_name}()`."
                     if function_name
                     else ""
                 )
@@ -132,7 +141,7 @@ class EWC:
             raise ValueError(
                 "Initial model parameters are not set."
                 + (
-                    f" Ensure `self.theta_star` has been initialized with start parameters before calling `{function_name}()`."
+                    f" Ensure `self.theta_star` has been initialized before calling `{function_name}()`."
                     if function_name
                     else ""
                 )
@@ -164,14 +173,16 @@ class EWC:
 
         This method is used to capture the model's parameters at various stages, such as after training on
         a task, to compare against θ* during penalty computation.
+
+        Note:
+        - The parameters alone do not provide gradient information necessary for computing the FIM.
         """
         logger.info("Retrieving current model parameters.")
         current_params = VectorDict()
         ner_model: Model = self.pipe.model
         for layer in ner_model.layers:
             for name in layer.param_names:
-                # Conditionally copy or keep reference based on the 'copy'
-                # parameter
+                # Conditionally copy or keep reference based on the 'copy' parameter
                 try:
                     if copy:
                         current_params[f"{layer.name}_{name}"] = layer.get_param(
@@ -197,16 +208,15 @@ class EWC:
         Returns:
         - fisher_matrix (VectorDict): A dictionary representing the Fisher Information Matrix.
 
-        The Fisher Information Matrix estimates the importance of each parameter θ_i by calculating
-        the expected value of the squared gradients of the loss function L with respect to θ_i.
+        Note:
+        - The FIM is computed using gradients of the loss function with respect to each parameter.
+        - These gradients depend on the data because they measure how the model's predictions deviate from the actual data labels.
+        - Without the data, we cannot compute the gradients necessary for the FIM.
 
         Mathematical Formulation:
         - For each parameter θ_i, compute:
-          F_i = E_x[(∂L(x; θ)/∂θ_i)^2]
-
-        - Where E_x denotes the expectation over the data samples x.
-
-
+          F_i = E_x [ (∂L(x; θ)/∂θ_i)^2 ]
+          where L(x; θ) is the loss function and x represents the data samples.
 
         Implementation Details:
         - The method performs forward and backward passes over the training data to accumulate gradients.
@@ -251,8 +261,7 @@ class EWC:
                 for (_, name), (_, grad) in layer.get_gradients().items():
                     if name not in layer.param_names:
                         continue
-                    # Square the gradient and add to the Fisher Information
-                    # Matrix
+                    # Square the gradient and add to the Fisher Information Matrix
                     grad = ops.asarray(grad).copy() ** 2
                     key = f"{layer.name}_{name}"
                     try:
@@ -294,6 +303,9 @@ class EWC:
           - θ_i: Current parameter value.
           - θ_i^*: Parameter value after training on the first task.
           - F_i: Fisher Information for parameter θ_i.
+
+        **Note:**
+        - The penalty term depends on both θ* and the FIM.
 
         The penalty term is added to the loss function to penalize deviations from θ_i^* proportional to F_i.
 
@@ -450,10 +462,10 @@ class EWC:
         - ewc_adjusted_loss (float): The total loss adjusted with the EWC penalty.
 
         Mathematical Formulation:
-        - L_total = L_task + (λ / 2) * Ω(θ)
+        - L_total = L_task + λ * Ω(θ)
         - Where:
           - L_task: Loss from the current task.
-          - Ω(θ) = Σ_i F_i * (θ_i - θ_i^*)^2
+          - Ω(θ) = (1/2) * Σ_i F_i * (θ_i - θ_i^*)^2
 
         Reference:
         - The total loss function including the EWC penalty as per Kirkpatrick et al., 2017.

@@ -1,7 +1,15 @@
 # EWC-Enhanced spaCy NER Training
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc?ref=badge_shield)
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/github/license/darkrockmountain/spacy-ewc?kill_cache=1)](LICENSE)
+[![Build Status](https://github.com/darkrockmountain/spacy-ewc/actions/workflows/test-lint.yml/badge.svg?kill_cache=1)](https://github.com/darkrockmountain/spacy-ewc/actions/workflows/test-lint.yml)
+[![codecov](https://codecov.io/gh/darkrockmountain/spacy-ewc/graph/badge.svg?token=8CXXQN183Y)](https://codecov.io/gh/darkrockmountain/spacy-ewc)
+[![GitHub last commit](https://img.shields.io/github/last-commit/darkrockmountain/spacy-ewc?kill_cache=1)](https://github.com/darkrockmountain/spacy-ewc/commits/main)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc?ref=badge_shield&issueType=license)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc?ref=badge_shield&issueType=security)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/darkrockmountain/spacy-ewc/badge)](https://scorecard.dev/viewer/?uri=github.com/darkrockmountain/spacy-ewc)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/darkrockmountain/spacy-ewc?kill_cache=1)](https://github.com/darkrockmountain/spacy-ewc/releases)
+[![PyPi Version](https://img.shields.io/pypi/v/spacy-ewc.svg)](https://pypi.python.org/pypi/spacy-ewc/)
 
 ## Overview
 
@@ -20,6 +28,7 @@ In sequential or continual learning, neural networks often suffer from **catastr
   - [Running the Example Script](#running-the-example-script)
   - [Script Workflow](#script-workflow)
   - [Expected Output](#expected-output)
+  - [Using the EWC Class in Your Own Code](#using-the-ewc-class-in-your-own-code)
 - [Detailed Explanation](#detailed-explanation)
   - [EWC Theory](#ewc-theory)
     - [Catastrophic Forgetting](#catastrophic-forgetting)
@@ -38,6 +47,8 @@ In sequential or continual learning, neural networks often suffer from **catastr
   - [Adding New Components](#adding-new-components)
   - [Customizing EWC Parameters](#customizing-ewc-parameters)
   - [Experimentation](#experimentation)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
 - [Limitations](#limitations)
 - [References](#references)
 - [License](#license)
@@ -106,8 +117,23 @@ The script performs the following steps:
 2. **Add new entity labels** (`BUDDY`, `COMPANY`) to the NER component.
 3. **Prepare training and test data**.
 4. **Initialize the EWC wrapper** with the NER pipe and original spaCy labels.
+
+```python
+    create_ewc_pipe(
+            ner,
+            [
+                Example.from_dict(nlp.make_doc(text), annotations)
+                for text, annotations in original_spacy_labels
+            ],
+        )
+```
+
 5. **Train the NER model** using EWC over multiple epochs.
 6. **Evaluate the model** on a test sentence and display recognized entities.
+
+```python
+"Elon Musk founded SpaceX in 2002 as the CEO and lead engineer, investing approximately $100 million of his own money into the company, which was initially based in El Segundo, California."
+```
 
 ### Expected Output
 
@@ -126,6 +152,77 @@ SpaceX: COMPANY
 approximately $100 million: MONEY
 El Segundo: GPE
 California: GPE
+```
+
+### Integrating the `EWC` Class for NER Training with `create_ewc_pipe`
+
+You can integrate the `EWC` class into your spaCy training scripts to enhance NER training with Elastic Weight Consolidation (EWC). Below is a sample setup:
+
+```python
+import spacy
+from spacy.training import Example
+from spacy_ewc import create_ewc_pipe
+from spacy_ewc.utils.extract_labels import extract_labels
+from spacy_ewc.utils.generate_spacy_entities import generate_spacy_entities
+
+# Load a pre-trained spaCy model
+nlp = spacy.load("en_core_web_sm")
+
+# Prepare initial training data with sample texts
+sample_texts = [
+    "Apple is looking at buying U.K. startup for $1 billion",
+    # Add more examples as needed...
+]
+
+# Generate entity annotations using the untrained NER model
+# Example output:
+# [
+#   ('Apple is looking at buying U.K. startup for $1 billion',
+#    {'entities': [(0, 5, 'ORG'), (27, 31, 'GPE'), (44, 54, 'MONEY')]}),
+#   ...
+# ]
+original_spacy_labels = generate_spacy_entities(sample_texts, nlp)
+
+# Initialize the EWC wrapper for the NER component using the original labels.
+# This setup preserves knowledge of initial training data, helping prevent
+# catastrophic forgetting as new data is added.
+
+# `create_ewc_pipe` steps:
+# - Captures a snapshot of the current model parameters.
+# - Calculates the Fisher Information Matrix (FIM) to identify key parameters.
+# - Applies an EWC penalty to protect these parameters during further training.
+create_ewc_pipe(
+    pipe=nlp.get_pipe("ner"),  # Specify the NER component
+    examples=[
+        Example.from_dict(nlp.make_doc(text), annotations)
+        for text, annotations in original_spacy_labels
+    ],
+)
+
+# Set up custom training data with new entity labels
+training_data = [
+    (
+        "John Doe works at OpenAI.",
+        {"entities": [(0, 8, "BUDDY"), (18, 24, "COMPANY")]},
+    ),
+]
+
+# Extract custom labels and add them to the NER component in the pipeline
+training_labels = extract_labels(training_data)
+for label in training_labels:
+    nlp.get_pipe("ner").add_label(label)
+
+# Convert training data into spaCy Example objects
+examples = [
+    Example.from_dict(nlp.make_doc(text), annotations)
+    for text, annotations in training_data
+]
+
+# Run the training loop
+for epoch in range(10):
+    losses = {}
+    nlp.update(examples, losses=losses)
+    print(f"Epoch {epoch}, Losses: {losses}")
 ```
 
 ## Detailed Explanation
@@ -191,6 +288,7 @@ This means the gradient update is adjusted to consider both the task-specific lo
 The `EWC` class encapsulates the implementation of the EWC algorithm within the spaCy framework. The workflow involves:
 
 1. **Initialization**:
+
    - **Capture Initial Parameters ($\theta^*$)**:
      - After training the initial task, capture and store the model's parameters.
    - **Compute Fisher Information Matrix (FIM)**:
@@ -206,10 +304,12 @@ The `EWC` class encapsulates the implementation of the EWC algorithm within the 
 #### EWC Class Methods
 
 - **`__init__(self, pipe, data, lambda_=1000.0, pipe_name=None)`**:
+
   - Initializes the EWC instance.
   - **Parameters**:
     - `pipe`: The spaCy pipeline component (e.g., `ner`).
     - `data`: Training examples used to compute the FIM.
+      - **Note**: Data is essential for computing the FIM, which estimates parameter importance. Initial parameters alone are insufficient because they do not contain gradient information.
     - `lambda_`: Regularization strength.
   - **Operations**:
     - Validates the pipe.
@@ -217,25 +317,30 @@ The `EWC` class encapsulates the implementation of the EWC algorithm within the 
     - Computes the FIM.
 
 - **`_capture_current_parameters(self, copy=False)`**:
+
   - Retrieves the current model parameters.
   - If `copy` is `True`, returns a deep copy to prevent modifications.
 
 - **`_compute_fisher_matrix(self, examples)`**:
+
   - Computes the Fisher Information Matrix.
   - For each parameter:
     - Accumulates the squared gradients over the dataset.
     - Averages the accumulated values to estimate $F_i$.
 
 - **`compute_ewc_penalty(self)`**:
+
   - Calculates the EWC penalty $\Omega(\theta)$.
   - Uses the stored $\theta^*$ and computed $F_i$.
 
 - **`compute_gradient_penalty(self)`**:
+
   - Computes the gradient of the EWC penalty with respect to $\theta$.
   - For each parameter:
     - Calculates $\lambda F_i (\theta_i - \theta_i^*)$.
 
 - **`apply_ewc_penalty_to_gradients(self)`**:
+
   - Adjusts the model's gradients in-place by adding the EWC gradient penalty.
   - Ensures that the penalty is applied before the optimizer updates the parameters.
 
@@ -248,10 +353,12 @@ The `EWC` class encapsulates the implementation of the EWC algorithm within the 
 #### Training Workflow with EWC
 
 1. **Initialize EWC**:
+
    - Use `create_ewc_pipe` to wrap the spaCy component with EWC.
    - This captures $\theta^*$ and computes the FIM.
 
 2. **Training Loop**:
+
    - For each training batch:
      - Compute task-specific loss and gradients.
      - **Apply EWC Penalty**:
@@ -268,6 +375,7 @@ The `EWC` class encapsulates the implementation of the EWC algorithm within the 
 - **`examples/ewc_ner_training_example.py`**: Example script demonstrating EWC-enhanced NER training.
 
 - **`data_examples/`**
+
   - `training_data.py`: Contains custom training data with new entity labels.
   - `original_spacy_labels.py`: Contains original spaCy NER labels for EWC reference.
 
@@ -290,10 +398,12 @@ The `EWC` class encapsulates the implementation of the EWC algorithm within the 
 To extend EWC to other spaCy pipeline components (e.g., `textcat`, `parser`):
 
 1. **Modify the `EWC` Class**:
+
    - Ensure the class captures and computes parameters relevant to the new component.
    - Adjust methods to handle different types of model architectures.
 
 2. **Adjust FIM Computation**:
+
    - Use appropriate loss functions and data for computing the Fisher Information Matrix for the new component.
 
 3. **Wrap the Component**:
@@ -302,6 +412,7 @@ To extend EWC to other spaCy pipeline components (e.g., `textcat`, `parser`):
 ### Customizing EWC Parameters
 
 - **Adjusting $\lambda$ (lambda)**:
+
   - Controls the balance between learning new information and retaining old knowledge.
   - Experiment with different values to find the optimal balance for your use case.
 
@@ -317,6 +428,46 @@ To extend EWC to other spaCy pipeline components (e.g., `textcat`, `parser`):
 
 - **Parameter Sensitivity**: Analyze how changes in $\lambda$ and other hyperparameters affect the model's performance.
 
+## Troubleshooting
+
+- **Gradient Shape Mismatch**:
+
+  - If you encounter shape mismatches when applying the EWC penalty, ensure that the model's parameters have not changed since initializing EWC.
+  - Adding new layers or changing the architecture after initializing EWC can cause mismatches.
+
+- **Zero or Negative Loss Values**:
+
+  - Ensure that your training data is sufficient and correctly formatted.
+  - Skipped batches due to zero loss can lead to issues in FIM computation.
+
+- **Memory Consumption**:
+  - Computing and storing the FIM can be memory-intensive for large models.
+  - Consider reducing model size or using a subset of data for FIM estimation.
+
+## Contributing
+
+We welcome contributions to enhance the functionality and usability of this project. To contribute:
+
+1. **Fork the repository** on GitHub.
+
+2. **Create a new branch** for your feature or bugfix:
+
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+3. **Make your changes** and commit them with clear messages.
+
+4. **Push to your fork**:
+
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+5. **Submit a pull request** detailing your changes.
+
+Please ensure that your code adheres to the existing style and includes appropriate tests.
+
 ## Limitations
 
 - **Diagonal Approximation**: The implementation uses a diagonal approximation of the FIM, which assumes parameter independence and may not capture all parameter interactions.
@@ -329,7 +480,7 @@ To extend EWC to other spaCy pipeline components (e.g., `textcat`, `parser`):
 
 ## References
 
-- Kirkpatrick, J., et al. (2017). *Overcoming catastrophic forgetting in neural networks*. Proceedings of the National Academy of Sciences, 114(13), 3521-3526. [arXiv:1612.00796](https://arxiv.org/abs/1612.00796)
+- Kirkpatrick, J., et al. (2017). _Overcoming catastrophic forgetting in neural networks_. Proceedings of the National Academy of Sciences, 114(13), 3521-3526. [arXiv:1612.00796](https://arxiv.org/abs/1612.00796)
 
 - spaCy Documentation: [https://spacy.io/](https://spacy.io/)
 
@@ -339,7 +490,6 @@ To extend EWC to other spaCy pipeline components (e.g., `textcat`, `parser`):
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc?ref=badge_large)
 
 ## Contact
@@ -348,4 +498,4 @@ For questions or further information, please contact the NLP Team at [dev@darkro
 
 ---
 
-*This README is intended to assist team members and contributors in understanding and utilizing the EWC-enhanced spaCy NER training framework.*
+_This README is intended to assist team members and contributors in understanding and utilizing the EWC-enhanced spaCy NER training framework._
