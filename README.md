@@ -1,7 +1,7 @@
 # EWC-Enhanced spaCy NER Training
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/github/license/darkrockmountain/spacy-ewc&kill_cache=1)](LICENSE)
+[![License](https://img.shields.io/github/license/darkrockmountain/spacy-ewc)](LICENSE)
 [![Build Status](https://github.com/darkrockmountain/spacy-ewc/actions/workflows/test-lint.yml/badge.svg?kill_cache=1)](https://github.com/darkrockmountain/spacy-ewc/actions/workflows/test-lint.yml)
 [![codecov](https://codecov.io/gh/darkrockmountain/spacy-ewc/graph/badge.svg?token=8CXXQN183Y)](https://codecov.io/gh/darkrockmountain/spacy-ewc)
 [![GitHub last commit](https://img.shields.io/github/last-commit/darkrockmountain/spacy-ewc?kill_cache=1)](https://github.com/darkrockmountain/spacy-ewc/commits/main)
