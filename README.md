@@ -1,6 +1,7 @@
 # EWC-Enhanced spaCy NER Training
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc?ref=badge_shield)
 
 ## Overview
 
@@ -337,6 +338,9 @@ To extend EWC to other spaCy pipeline components (e.g., `textcat`, `parser`):
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarkrockmountain%2Fspacy-ewc?ref=badge_large)
 
 ## Contact
 
