@@ -87,9 +87,17 @@ In sequential or continual learning, neural networks often suffer from **catastr
 
    - **Development dependencies** (recommended for contributors):
 
-     ```bash
-     pip install .[dev]
-     ```
+      ```bash
+      pip install .[dev]
+      ```
+      
+      After installing the development dependencies, you’ll also need to manually install the spaCy language model used in tests:
+
+      ```bash
+      python -m spacy download en_core_web_sm
+      ```
+
+      _This ensures that all dependencies and the necessary language model are available for development and testing._
 
 4. **Download the spaCy English model (Optional)**:
 
