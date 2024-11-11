@@ -3,6 +3,9 @@ name: Test and Lint
 # The Test and Lint is executed for all branches.
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   test-lint:
     runs-on: ubuntu-latest
