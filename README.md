@@ -164,18 +164,19 @@ California: GPE
 
 ### Using the EWC Class in Your Own Code
 
-#### Integrating the `EWC` Class for NER Training with `create_ewc_pipe`
+#### Integrating the `EWC` Class for NER Training with `EWCModelWrapper`
 
 You can integrate the `EWC` class into your spaCy training scripts to enhance NER training with Elastic Weight Consolidation (EWC). Below is a sample setup:
 
 ```python
 import spacy
 from spacy.training import Example
-from spacy_ewc import create_ewc_pipe
+from spacy_ewc.spacy_wrapper import EWCModelWrapper
+from spacy_ewc.ewc import EWC
 from spacy_ewc.utils.extract_labels import extract_labels
 from spacy_ewc.utils.generate_spacy_entities import generate_spacy_entities
 
-# Load a pre-trained spaCy model
+# Load a pre-trained spaCy model (e.g., "en_core_web_sm" or any other pre-trained model)
 nlp = spacy.load("en_core_web_sm")
 
 # Prepare initial training data with sample texts
@@ -184,29 +185,36 @@ sample_texts = [
     # Add more examples as needed...
 ]
 
-# Generate entity annotations using the untrained NER model
+# Generate entity annotations using the current NER model
 # Example output:
 # [
 #   ('Apple is looking at buying U.K. startup for $1 billion',
 #    {'entities': [(0, 5, 'ORG'), (27, 31, 'GPE'), (44, 54, 'MONEY')]}),
 #   ...
 # ]
+# Note: Output depends on the existing knowledge of "en_core_web_sm" and may vary.
 original_spacy_labels = generate_spacy_entities(sample_texts, nlp)
 
-# Initialize the EWC wrapper for the NER component using the original labels.
-# This setup preserves knowledge of initial training data, helping prevent
-# catastrophic forgetting as new data is added.
-
-# `create_ewc_pipe` steps:
+# EWC and EWCModelWrapper initialization steps:
 # - Captures a snapshot of the current model parameters.
 # - Calculates the Fisher Information Matrix (FIM) to identify key parameters.
 # - Applies an EWC penalty to protect these parameters during further training.
-create_ewc_pipe(
-    pipe=nlp.get_pipe("ner"),  # Specify the NER component
-    examples=[
-        Example.from_dict(nlp.make_doc(text), annotations)
-        for text, annotations in original_spacy_labels
-    ],
+#
+# Alternatively, you can use the helper function `spacy_ewc.spacy_wrapper.create_ewc_pipe()`
+# to automatically initialize and wrap the component in the NLP pipeline, which
+# performs the steps below for you.
+
+ner = nlp.get_pipe("ner")  # Specify the NER component
+
+# Initialize EWC with the pipeline component and the original spaCy labels data to calculate the FIM
+ewc = EWC(ner, data=[
+    Example.from_dict(nlp.make_doc(text), annotations)
+    for text, annotations in original_spacy_labels
+])
+
+# Wrap the component's model with EWCModelWrapper to apply EWC penalties
+ner.model = EWCModelWrapper(
+    ner.model, ewc.apply_ewc_penalty_to_gradients
 )
 
 # Set up custom training data with new entity labels
@@ -214,13 +222,16 @@ training_data = [
     (
         "John Doe works at OpenAI.",
         {"entities": [(0, 8, "BUDDY"), (18, 24, "COMPANY")]},
+        # Add more examples as needed...
     ),
 ]
 
 # Extract custom labels and add them to the NER component in the pipeline
+# Here, "BUDDY" and "COMPANY" are new labels not previously present in the model.
 training_labels = extract_labels(training_data)
 for label in training_labels:
-    nlp.get_pipe("ner").add_label(label)
+    if label not in ner.labels:
+        nlp.get_pipe("ner").add_label(label)
 
 # Convert training data into spaCy Example objects
 examples = [
@@ -228,11 +239,20 @@ examples = [
     for text, annotations in training_data
 ]
 
-# Run the training loop
+# Training loop: EWC penalties are applied to avoid forgetting original labels
 for epoch in range(10):
     losses = {}
     nlp.update(examples, losses=losses)
     print(f"Epoch {epoch}, Losses: {losses}")
+
+# Run the test sentence through the model to evaluate results
+# Expected Result: The model should recognize the new "BUDDY" and "COMPANY" labels
+# as well as the original labels, demonstrating retained prior knowledge
+# while integrating new information.
+doc = nlp("Elon Musk founded SpaceX in 2002 as the CEO and lead engineer...")
+print("\nEntities in test sentence:")
+for ent in doc.ents:
+    print(f"{ent.text}: {ent.label_}")
 ```
 
 ## Detailed Explanation
