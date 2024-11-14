@@ -29,6 +29,7 @@ jobs:
         run: pytest --cov=spacy_ewc --cov-report xml tests/
 
       - name: Upload coverage to Codecov
+        if: ${{ vars.CODECOV_BRANCHES && contains(fromJson(vars.CODECOV_BRANCHES), github.ref_name) }}
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
