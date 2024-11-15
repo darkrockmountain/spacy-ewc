@@ -4,7 +4,10 @@ on:
   release:
     types: [published, prereleased]
   workflow_dispatch:
-
+  
+permissions:
+  contents: read
+  
 jobs:
   publish:
     name: Upload release to PyPI
